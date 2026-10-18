@@ -27,6 +27,27 @@ This plugin does three things:
 - Duplicate copies of the same account are collapsed to the canonical file
 - The panel polls every 10 seconds, so a freshly signed-in account appears by itself
 
+### Moving accounts between machines
+
+Use this to share one account pool between, say, the office and home machines:
+
+- **Export** packs the whole archive into one downloadable file
+- **Import** merges such a file into the local archive
+
+**Import merges, never overwrites blindly:**
+
+| Case | Result |
+|---|---|
+| account not present locally | added |
+| present locally, **incoming** refresh token expires later | replaced (the existing file is first renamed to `<uid>.json.imported-<stamp>`) |
+| present locally, **local** expires later or equal | local copy kept untouched |
+
+The last row is the important one: **re-importing an export on the machine that produced it cannot log you out.**
+
+> ⚠️ **An export file contains plaintext tokens** — it *is* those logins. Export takes two clicks (the first turns the button into an explicit warning). Keep the file in your own encrypted storage and delete it when done.
+>
+> Reminder: once credentials leave the machine they **cannot be revoked remotely**. WorkBuddy only offers account-level revocation (change the password); there is no per-session or per-device kill switch.
+
 ### Automatic rotation
 
 | Upstream result | Action | Why |
@@ -133,6 +154,21 @@ On by default. The switch sits at the bottom of the card: **"Rotate when quota r
 ### Clear a cooldown manually
 
 If an account is still marked as cooling but you know its quota is back, click "Clear cooldown".
+
+### Sync to another machine
+
+On the source machine:
+
+1. Click "Export credentials"
+2. The button turns into a red "Confirm export (file contains plaintext tokens)" — click again
+3. The browser downloads `workbuddy-accounts-<timestamp>.json`
+
+On the target machine:
+
+1. Click "Import credentials" and pick that file
+2. The panel reports "added N, refreshed M, kept K local"
+
+A bundle is roughly 2.4 KB per account (3 accounts ≈ 7 KB). Delete the file once both machines are synced.
 
 ## How it works
 

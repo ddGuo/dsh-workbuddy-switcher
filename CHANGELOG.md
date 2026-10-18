@@ -4,6 +4,29 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Export / import a credential bundle**, for moving one account pool between
+  machines. A bundle is self-describing (`dsh-workbuddy-accounts/v1`) and
+  carries the accounts in the desktop shape, so an entry can be dropped straight
+  into the archive directory by hand if the UI is unavailable.
+- **Merge-on-import**, never blind overwrite: a new account is added, an account
+  whose incoming refresh token lives longer is replaced (existing file renamed
+  to `<uid>.json.imported-<stamp>` first), and a local copy that lives at least
+  as long is left alone. Re-importing an export on the machine that produced it
+  therefore cannot log the user out — verified as an explicit test case.
+- **Two-step export confirmation**, because the file is plaintext: the first
+  click turns the button into an explicit warning, the second writes the file.
+  The bundle also carries a `warning` field so the risk travels with the data.
+
+### Changed
+
+- The route's request body cap went from 1 MB to 8 MB so a bundle with many
+  accounts fits (each archive is about 2.3 KB; the route is loopback-only, so
+  the cap bounds a local mistake rather than a remote attack).
+
 ## [0.1.0] - 2026-10-18
 
 First release. Extracted from the ad-hoc scripts used while diagnosing the
