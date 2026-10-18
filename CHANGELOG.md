@@ -8,6 +8,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Model-scoped cooldowns.** A `429 soft_rate` that named one model now benches
+  only that model; the login stays in rotation for every other model, and the
+  panel marks it as "`<model>` cooling until …" rather than as an exhausted
+  account. A `402 hard_credit`, or any message carrying credit-exhaustion
+  wording, still benches the whole account — that is what it means. The failing
+  model is taken from the agent's routed request, with the failure message as a
+  fallback; when it cannot be determined the cooldown falls back to the account
+  scope, since a limit that cannot be attributed must not be ignored.
+- **Per-model "clear cooldown".** A model-scoped badge gets its own clear button,
+  which removes that model's scope only. Clearing a model never reopens an
+  account whose account-level cooldown is still live.
 - **Export / import a credential bundle**, for moving one account pool between
   machines. A bundle is self-describing (`dsh-workbuddy-accounts/v1`) and
   carries the accounts in the desktop shape, so an entry can be dropped straight
@@ -23,9 +34,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- The cooldown table accepts two shapes: a flat entry (whole account) and an
+  entry with a `models` map (per model). Existing flat entries keep their
+  meaning, so an upgrade needs no migration.
+- The rotation pool and the reclaim sweep both judge an account against the
+  model that is actually routed, instead of treating any cooldown as "unusable".
 - The route's request body cap went from 1 MB to 8 MB so a bundle with many
   accounts fits (each archive is about 2.3 KB; the route is loopback-only, so
   the cap bounds a local mistake rather than a remote attack).
+
+### Fixed
+
+- A single throttled model no longer takes a whole account out of the pool for
+  ten minutes (or a day, from the third strike) while its other models were
+  perfectly usable.
+- Clearing one model's cooldown no longer drops the account-level cooldown the
+  same entry carried.
+- The reset instant is also recognised when the shim truncated the upstream
+  sentence, by matching the timestamp's `UTC+8` suffix on its own.
 
 ## [0.1.0] - 2026-10-18
 

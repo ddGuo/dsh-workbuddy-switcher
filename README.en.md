@@ -55,11 +55,30 @@ The last row is the important one: **re-importing an export on the machine that 
 
 | Upstream result | Action | Why |
 |---|---|---|
-| `429 soft_rate` | ✅ rotate and retry | a different account recovers instantly |
-| `402 hard_credit` | ✅ rotate and retry | same |
+| `429 soft_rate` (**no** credit wording) | ✅ cool **that model only**, rotate and retry | a different account recovers instantly, while the same login still serves every other model |
+| `429 soft_rate` + credit wording | ✅ cool the **whole account**, rotate and retry | it really is an exhausted balance, riding on a 429 |
+| `402 hard_credit` | ✅ cool the **whole account**, rotate and retry | same |
 | `401` / `12153` | ❌ no rotation | another account does not fix an expired session |
 | Content rejection | ❌ no rotation | unrelated to the account |
 | `5xx` | ❌ no rotation | left to `dsh-llm-retry` backoff |
+
+#### The limit is bound to the model
+
+This is what separates the plugin from "a 429 means the account is dead".
+
+WorkBuddy answers a **single throttled model** and a **spent account balance** with the same `429 soft_rate`, so the status code alone cannot tell them apart. The cooldown is therefore recorded against the scope the failure actually describes:
+
+| Signal | Scope |
+|---|---|
+| `402`, or wording like "insufficient credit" / "quota exceeded" | the whole account (every model) |
+| `429 soft_rate` alone | only the model the failed request used |
+| the model cannot be determined | the whole account (conservative) |
+
+So after an account is throttled on `claude-sonnet-4-5`:
+
+- it drops out of the candidate pool **for that model**, and the request moves to a sibling login;
+- it stays a healthy account **for every other model**, and keeps taking part in rotation and reclaim;
+- the panel says "claude-sonnet-4-5 cooling until …" instead of making the whole login look out of quota.
 
 Cooldown length:
 
@@ -74,7 +93,8 @@ A cooldown expiring only makes an account *eligible* again — it does not move 
 
 Two guards:
 
-- current account still cooling → skip (let the rotation own it)
+- the current account still cooling **for the routed model** → skip (let the rotation own it);
+  a limit on some *other* model does not hold the sweep back
 - an Agent is mid-turn → skip (never interrupt work in progress)
 
 ### Two surfaces
@@ -251,6 +271,22 @@ Date.UTC(y, m - 1, d, h, min, s) - 8 * 3600 * 1000
 | `~/.dsh/workbuddy-accounts/<uid>.json` | credential archive (**plaintext**) |
 | `~/.dsh/workbuddy-switcher.json` | current selection + cooldown table |
 
+A cooldown entry takes one of two shapes, depending on its scope:
+
+```json
+{
+  "cooldowns": {
+    "alice.json": { "untilMs": 1792374983000, "reason": "…", "strikes": 1 },
+    "bob.json": { "models": { "claude-sonnet-4-5": { "untilMs": 1792374983000, "reason": "…" } } }
+  }
+}
+```
+
+- `alice` is an **account-level** cooldown (credits gone): no model works
+- `bob` is limited on **one model** only; the rest of that login stays in rotation
+
+The older flat shape is still read: an entry with no `models` field means the whole account.
+
 ### Security
 
 Archives hold **plaintext accessToken / refreshToken**.
@@ -288,10 +324,24 @@ Almost certainly a wrong archive shape. The top-level keys must be `auth` / `acc
 
 Click "Clear cooldown".
 
+When the badge names a **model** (say "claude-sonnet-4-5 cooling until …"), the button reads
+"Clear this model's cooldown" and drops only that model's limit, leaving any other
+cooldown on the same login in place.
+
+### Telling an exhausted login from a throttled model
+
+Look at the badge:
+
+- **"account quota, cooling until …"** → the whole login is limited; only switching accounts helps
+- **"model-name, cooling until …"** → that model alone is limited; another model on the same login still works
+
+A dimmed badge marks a cooldown that does not affect the currently routed model.
+
 ## Limitations
 
 - **Rotation only covers archived accounts.** In "follow the client" mode the plugin will not switch away, since that would silently change accounts.
 - **Remaining quota is unknowable.** A `429` means "limited right now", not "how much is left". Rotation ordering uses refresh-token lifetime, not balance.
+- **The limit's scope is inferred.** The upstream may answer "this model is throttled" and "the balance is gone" with the same 429. The plugin separates them by whether the message carries credit wording: with it the account is benched, without it only the model is. When the model cannot be determined it falls back to the account scope (conservative).
 - **Archives are plaintext.** See the security note above.
 
 ## License
