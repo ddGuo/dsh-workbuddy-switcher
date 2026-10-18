@@ -105,10 +105,10 @@ In both shots `4dba68a4` is cooling ("冷却至 10/19 09:56") — the state left
 
 ### One-line install (recommended)
 
-Hand the line below to the Agent already running on this machine (this DSH session is enough): it installs both plugins if missing, updates them if they are not current, and treats `dsh-workbuddy-connect` the same way.
+Hand the line below to the Agent already running on this machine (this DSH session is enough): it installs both plugins if missing, updates them if they are not current, and treats the dependency `dsh-workbuddy-connect` the same way.
 
 ```text
-Install the dsh-workbuddy-switcher plugin (https://github.com/ddGuo/dsh-workbuddy-switcher): install it if missing, update it if it is not the latest, and do the same for its dependency dsh-workbuddy-connect. When done, remind me to fully quit and relaunch DSH.
+Install the dsh-workbuddy-switcher plugin (https://github.com/ddGuo/dsh-workbuddy-switcher): install it if missing, update it if it is not the latest, and do the same for the plugin it depends on, dsh-workbuddy-connect (https://github.com/corrinehu/dsh-workbuddy-connect). When done, remind me to fully quit and relaunch DSH.
 ```
 
 Or run the equivalent command yourself — **re-running it is the update**:

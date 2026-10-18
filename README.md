@@ -107,10 +107,10 @@
 
 ### 一句话安装（推荐）
 
-把下面这句交给本机已有的 Agent（这个 DSH 会话就够用）：没装就装，装了但不是最新版就更新，依赖的 `dsh-workbuddy-connect` 同样处理。
+把下面这句交给本机已有的 Agent（这个 DSH 会话就够用）：没装就装，装了但不是最新版就更新，它依赖的 `dsh-workbuddy-connect` 同样处理。
 
 ```text
-安装 dsh-workbuddy-switcher 插件（https://github.com/ddGuo/dsh-workbuddy-switcher）：本机没有就装，已有但不是最新版就更新；依赖插件 dsh-workbuddy-connect 也是如此。装完提醒我完全退出并重开 DSH。
+安装 dsh-workbuddy-switcher 插件（https://github.com/ddGuo/dsh-workbuddy-switcher）：本机没有就装，已有但不是最新版就更新；它依赖的插件 dsh-workbuddy-connect（https://github.com/corrinehu/dsh-workbuddy-connect）同样处理。装完提醒我完全退出并重开 DSH。
 ```
 
 自己跑也行，等价的一条命令（**重复执行即更新**）：
