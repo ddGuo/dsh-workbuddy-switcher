@@ -1,0 +1,52 @@
+{
+  "name": "dsh-workbuddy-switcher",
+  "displayName": "DSH WorkBuddy Switcher",
+  "description": "Manage a local pool of WorkBuddy accounts and switch between them inside DeepSeek Harness — with automatic rotation when an account runs out of quota.",
+  "version": "0.1.0",
+  "author": "guoding",
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "deepseek",
+    "workbuddy",
+    "account-switcher",
+    "multi-account"
+  ],
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md",
+    "README.en.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.5",
+    "dsh-workbuddy-connect": ">=0.7.8"
+  },
+  "peerDependenciesMeta": {
+    "dsh-workbuddy-connect": {
+      "optional": true
+    }
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
+    }
+  }
+}

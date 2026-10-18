@@ -1,0 +1,23 @@
+# Build artifacts and dependencies
+node_modules/
+*.log
+*.tgz
+
+# Local development scratch
+.DS_Store
+Thumbs.db
+*.tmp
+*.bak
+
+# Credentials — never commit these
+*.info
+workbuddy-accounts/
+.workbuddy-auth.json
+.workbuddy-ai-auth.json
+.workbuddy-catalog.json
+.workbuddy-probe.json
+.workbuddy-visibility.json
+.workbuddy-host-heartbeat.json
+workbuddy-switcher.json
+auths/
+data/
