@@ -12,11 +12,14 @@ Manage a pool of WorkBuddy accounts inside DeepSeek Harness and switch between t
 
 `dsh-workbuddy-connect` uses one account at a time. Switching means either signing in again inside the WorkBuddy desktop app or hand-editing a config file. WorkBuddy also has a daily quota, so once an account is exhausted it is unusable for the rest of the day.
 
-This plugin does three things:
+Across machines — the office and home, say — the archives are also independent: an account signed in on machine A has to be signed in again on machine B.
+
+This plugin does four things:
 
 1. **Account archive** — stores each account's credentials locally, so switching no longer requires the desktop app
 2. **One-click switching** — from the plugin settings card or a floating bottom-right button; the model list refreshes immediately
 3. **Automatic rotation** — on a quota failure it moves to the next account and retries, so the interruption is invisible
+4. **Cross-machine sync** — export one file, import it on the other machine, and the two archives line up
 
 ## Features
 
