@@ -19,6 +19,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Per-model "clear cooldown".** A model-scoped badge gets its own clear button,
   which removes that model's scope only. Clearing a model never reopens an
   account whose account-level cooldown is still live.
+- **A 24-hour hold on hand-picked accounts.** Clicking "use this account" records
+  `selected.source: 'user'` and `selected.holdUntilMs`, and the passive reclaim
+  sweep leaves that account alone until the hold expires. Previously the sweep
+  re-ranked accounts by refresh-token lifetime every minute, so a manual choice
+  that was not the longest-lived one silently reverted within a minute — the
+  "I picked 66ce and it jumped back to b058" symptom. Quota rotation ignores the
+  hold: an account that is actually limited cannot serve the request whatever was
+  asked for earlier. The panel shows "hand-picked, held until …".
 - **Export / import a credential bundle**, for moving one account pool between
   machines. A bundle is self-describing (`dsh-workbuddy-accounts/v1`) and
   carries the accounts in the desktop shape, so an entry can be dropped straight
@@ -52,6 +60,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   same entry carried.
 - The reset instant is also recognised when the shim truncated the upstream
   sentence, by matching the timestamp's `UTC+8` suffix on its own.
+- The passive reclaim sweep no longer reverts a manual account choice on its next
+  pass. It previously re-ranked by refresh-token lifetime with no notion of who
+  made the selection, so a hand-picked account that was not the longest-lived one
+  was switched back within a minute.
 
 ## [0.1.0] - 2026-10-18
 

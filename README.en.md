@@ -91,11 +91,34 @@ Cooldowns are persisted, survive restarts, expire on their own, and a once-a-min
 
 A cooldown expiring only makes an account *eligible* again — it does not move the selection back. Every minute the plugin checks whether the current account is still the best healthy one and switches back if not.
 
-Two guards:
+Three guards:
 
+- a hand-picked account is held for 24 hours (see below), so a manual choice is not undone within the minute
 - the current account still cooling **for the routed model** → skip (let the rotation own it);
   a limit on some *other* model does not hold the sweep back
 - an Agent is mid-turn → skip (never interrupt work in progress)
+
+### The manual-selection hold
+
+**After you click "use this account", the plugin will not switch away from it for 24 hours.**
+
+Why: the reclaim sweep orders accounts by longest-lived refresh token. If the account
+you picked by hand is not the longest-lived one, the next sweep (≤60 s) would simply
+put it back — which looks like "I picked 66ce and a moment later it jumped back to b058".
+
+The hold blocks **passive reclaim only**, never **quota rotation**:
+
+| During the hold | Behaviour |
+|---|---|
+| the sweep wants to return to a longer-lived account | ⏸ stays put |
+| the current account hits a 429 / 402 | ✅ rotates and retries as usual |
+
+In other words, **only a quota failure moves the selection during those 24 hours**. Once
+the hold expires, reclaim resumes normally. The panel shows "hand-picked, held until …"
+at the top, and the tag disappears on its own.
+
+The switch's origin is recorded in the state file as `selected.source` (`user` / `auto`)
+and `selected.holdUntilMs`.
 
 ### Two surfaces
 
@@ -287,6 +310,25 @@ A cooldown entry takes one of two shapes, depending on its scope:
 
 The older flat shape is still read: an entry with no `models` field means the whole account.
 
+The selection and its hold live in the same file:
+
+```json
+{
+  "selected": {
+    "file": "128a8f9c-….json",
+    "source": "user",
+    "selectedAt": 1792327652403,
+    "holdUntilMs": 1792414052403
+  }
+}
+```
+
+- `source` — `user` (clicked in the panel) or `auto` (rotation / reclaim)
+- `holdUntilMs` — present for `user` only; passive reclaim is suspended until then
+
+Deleting `holdUntilMs`, or moving it into the past, returns that account to automatic
+scheduling immediately.
+
 ### Security
 
 Archives hold **plaintext accessToken / refreshToken**.
@@ -337,11 +379,24 @@ Look at the badge:
 
 A dimmed badge marks a cooldown that does not affect the currently routed model.
 
+### A manual switch jumped back on its own
+
+It should not within 24 hours. If it does, the hold is not in effect:
+
+1. check for the "hand-picked, held until …" tag at the top of the panel — no tag means the switch was not recorded as manual
+2. check `selected.source` is `user` and `selected.holdUntilMs` is in the future in the state file
+3. if the switch came from **quota rotation**, that is expected — the hold does not block it
+
+### Hand an account back to automatic scheduling right away
+
+Delete `selected.holdUntilMs` from the state file, or set it to a past instant.
+
 ## Limitations
 
 - **Rotation only covers archived accounts.** In "follow the client" mode the plugin will not switch away, since that would silently change accounts.
 - **Remaining quota is unknowable.** A `429` means "limited right now", not "how much is left". Rotation ordering uses refresh-token lifetime, not balance.
 - **The limit's scope is inferred.** The upstream may answer "this model is throttled" and "the balance is gone" with the same 429. The plugin separates them by whether the message carries credit wording: with it the account is benched, without it only the model is. When the model cannot be determined it falls back to the account scope (conservative).
+- **A manual choice gives up a small optimisation.** For 24 hours the plugin will not return to the account with the longer-lived refresh token; that is deliberate — your choice outranks that optimisation.
 - **Archives are plaintext.** See the security note above.
 
 ## License
