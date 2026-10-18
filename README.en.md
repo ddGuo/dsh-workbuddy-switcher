@@ -62,6 +62,16 @@ Both read the same data:
 | **Plugin settings page** | full list, account details, cooldown state, auto-rotate switch |
 | **Bottom-right floating button** | quick switch popover |
 
+**Plugin settings page** (sidebar → Plugins → `dsh-workbuddy-switcher`): every account shows its region, cooldown countdown and refresh-token expiry, with the rotation switch at the bottom.
+
+![Plugin settings page](docs/plugin-page.png)
+
+**Bottom-right floating button**: switch without leaving the conversation; the popover carries the same cooldown state, import action and per-account "clear cooldown".
+
+![Bottom-right floating button](docs/quick-switch.png)
+
+In both shots `4dba68a4` is cooling ("冷却至 10/19 09:56") — the state left behind after the plugin rotated away from it when its quota ran out — while `128a8f9c` is the account in use.
+
 ## Install
 
 ### Requirements
