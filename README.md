@@ -105,29 +105,37 @@
 - DSH `0.2.1-rc.2` 或更新的内核
 - 本机已登录过至少一个 WorkBuddy 账号
 
+### 一句话安装（推荐）
+
+把下面这句交给本机已有的 Agent（这个 DSH 会话就够用）：没装就装，装了但不是最新版就更新，依赖的 `dsh-workbuddy-connect` 同样处理。
+
+```text
+安装 dsh-workbuddy-switcher 插件（https://github.com/ddGuo/dsh-workbuddy-switcher）：本机没有就装，已有但不是最新版就更新；依赖插件 dsh-workbuddy-connect 也是如此。装完提醒我完全退出并重开 DSH。
+```
+
+自己跑也行，等价的一条命令（**重复执行即更新**）：
+
+```powershell
+dsh plugin --profile desktop add "dsh-workbuddy-connect@^0.7.8" "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git" --config.strict-dep-builds=false
+```
+
+> - 写 `^0.7.8` 而不是 `@latest`：`latest` 标签在镜像上可能仍指向旧版（实测解析到 0.7.7，被内核的版本兼容检查拒掉）。
+> - 已经是 `file:` 安装的，这条会顺手换成 git 来源（实测 `- dsh-workbuddy-switcher` / `+ dsh-workbuddy-switcher 0.1.0`）；想继续用本地源码，改用下面「从本地源码装」那条。
+> - 对**同一个** `file:` 路径重复 `add`，pnpm 只会回 `Already up to date`，改过的源码不会同步过去。
+
 ### 需要单独安装 dsh-workbuddy-connect
 
 本插件**不会自动带上** `dsh-workbuddy-connect`。后者声明为 `peerDependency`，而 DSH profile 使用 `autoInstallPeers: false`，所以装本插件时只会安装它自己（实测 `Packages: +1`）。
 
-如果改成硬依赖，安装会连带拉进 **87 个包**——而且可能出现两份 `dsh-workbuddy-connect` 实例：一份在 profile 顶层、一份在插件的 `node_modules` 里。两个实例读到的是不同的 `process.env`，切换就会失效。所以这个「不自动安装」是有意的。
+如果改成硬依赖，安装会连带拉进 **87 个包**——而且可能出现两份 `dsh-workbuddy-connect` 实例：一份在 profile 顶层、一份在插件的 `node_modules` 里。两个实例读到的是不同的 `process.env`，切换就会失效。所以这个「不自动安装」是有意的，这也是上面那条命令要把两个包一起写上的原因。
 
-两个都装：
+从本地源码装（改代码时用）：
 
 ```powershell
-# 1. 先装 WorkBuddy 模型接入
-dsh plugin --profile desktop add dsh-workbuddy-connect@0.7.8
-
-# 2. 再装账号切换
 dsh plugin --profile desktop add "file:E:\dsh\dsh-workbuddy-switcher"
 ```
 
-从 git 安装本插件：
-
-```powershell
-dsh plugin --profile desktop add "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git"
-```
-
-> **注意**：`file:` 安装是**复制**不是软链接。修改源码后需要重新同步到 profile：
+> **注意**：`file:` 安装是**复制**不是软链接，而且重复 `add` 会被 pnpm 判为 `Already up to date`。改完源码要么 `remove` + `add`，要么直接同步：
 >
 > ```powershell
 > Copy-Item "E:\dsh\dsh-workbuddy-switcher\lib\*" `

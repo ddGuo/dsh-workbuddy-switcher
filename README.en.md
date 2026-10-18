@@ -103,29 +103,37 @@ In both shots `4dba68a4` is cooling ("冷却至 10/19 09:56") — the state left
 - DSH `0.2.1-rc.2` or newer
 - at least one WorkBuddy account signed in on this machine
 
+### One-line install (recommended)
+
+Hand the line below to the Agent already running on this machine (this DSH session is enough): it installs both plugins if missing, updates them if they are not current, and treats `dsh-workbuddy-connect` the same way.
+
+```text
+Install the dsh-workbuddy-switcher plugin (https://github.com/ddGuo/dsh-workbuddy-switcher): install it if missing, update it if it is not the latest, and do the same for its dependency dsh-workbuddy-connect. When done, remind me to fully quit and relaunch DSH.
+```
+
+Or run the equivalent command yourself — **re-running it is the update**:
+
+```powershell
+dsh plugin --profile desktop add "dsh-workbuddy-connect@^0.7.8" "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git" --config.strict-dep-builds=false
+```
+
+> - `^0.7.8` rather than `@latest`: on mirrors the `latest` tag can still point at an old build (it resolved to 0.7.7 here and was rejected by the runtime's compatibility check).
+> - If this plugin is already installed from a `file:` path, this command switches it to the git source (`- dsh-workbuddy-switcher` / `+ dsh-workbuddy-switcher 0.1.0` in the run above); to stay on your local checkout, use the local-source command below instead.
+> - Re-`add`ing the **same** `file:` path only prints `Already up to date` — edited sources are not copied over.
+
 ### dsh-workbuddy-connect must be installed separately
 
 This plugin does **not** pull `dsh-workbuddy-connect` in. That package is a `peerDependency`, and DSH profiles set `autoInstallPeers: false`, so installing this plugin installs only itself (measured: `Packages: +1`).
 
-Declaring it as a hard dependency would drag in **87 packages**, and could produce two `dsh-workbuddy-connect` instances — one at the profile root, one inside this plugin's `node_modules`. The two would read different `process.env` objects, which breaks switching. Leaving it out is deliberate.
+Declaring it as a hard dependency would drag in **87 packages**, and could produce two `dsh-workbuddy-connect` instances — one at the profile root, one inside this plugin's `node_modules`. The two would read different `process.env` objects, which breaks switching. Leaving it out is deliberate, and it is why the command above names both packages.
 
-Install both:
+Installing from local sources (while hacking on the plugin):
 
 ```powershell
-# 1. the model bridge
-dsh plugin --profile desktop add dsh-workbuddy-connect@0.7.8
-
-# 2. the account switcher
 dsh plugin --profile desktop add "file:E:\dsh\dsh-workbuddy-switcher"
 ```
 
-Or install this plugin from git:
-
-```powershell
-dsh plugin --profile desktop add "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git"
-```
-
-> **Note**: a `file:` install **copies** rather than symlinks. After editing the sources, re-sync:
+> **Note**: a `file:` install **copies** rather than symlinks, and a repeated `add` is judged `Already up to date`. Either `remove` + `add`, or re-sync directly:
 >
 > ```powershell
 > Copy-Item "E:\dsh\dsh-workbuddy-switcher\lib\*" `
