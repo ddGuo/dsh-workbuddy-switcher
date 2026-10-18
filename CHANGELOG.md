@@ -17,9 +17,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   to `<uid>.json.imported-<stamp>` first), and a local copy that lives at least
   as long is left alone. Re-importing an export on the machine that produced it
   therefore cannot log the user out — verified as an explicit test case.
-- **Two-step export confirmation**, because the file is plaintext: the first
-  click turns the button into an explicit warning, the second writes the file.
-  The bundle also carries a `warning` field so the risk travels with the data.
+- **One-click export.** The file is plaintext, so the risk is stated in the
+  button tooltip, in the panel's banner and in the bundle's own `warning` field
+  rather than gating the click behind a confirmation step.
 
 ### Changed
 

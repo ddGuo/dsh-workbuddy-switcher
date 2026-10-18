@@ -47,7 +47,7 @@ Use this to share one account pool between, say, the office and home machines:
 
 The last row is the important one: **re-importing an export on the machine that produced it cannot log you out.**
 
-> ⚠️ **An export file contains plaintext tokens** — it *is* those logins. Export takes two clicks (the first turns the button into an explicit warning). Keep the file in your own encrypted storage and delete it when done.
+> ⚠️ **An export file contains plaintext tokens** — it *is* those logins. Keep the file in your own encrypted storage and delete it when done.
 >
 > Reminder: once credentials leave the machine they **cannot be revoked remotely**. WorkBuddy only offers account-level revocation (change the password); there is no per-session or per-device kill switch.
 
@@ -163,8 +163,7 @@ If an account is still marked as cooling but you know its quota is back, click "
 On the source machine:
 
 1. Click "Export credentials"
-2. The button turns into a red "Confirm export (file contains plaintext tokens)" — click again
-3. The browser downloads `workbuddy-accounts-<timestamp>.json`
+2. The browser downloads `workbuddy-accounts-<timestamp>.json`
 
 On the target machine:
 
