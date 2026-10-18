@@ -4,10 +4,66 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.1] - 2026-10-18
+
+### Fixed
+
+- **Concurrent state writes could fail or lose data.** Every writer used the same
+  fixed temp path (`workbuddy-switcher.json.tmp`), so two of them raced: the first
+  `rename` consumed the file and the second failed with `ENOENT`, surfacing as an
+  HTTP 500 on a click that should have been harmless. A lost update followed the
+  same way (read, read, write, write). Measured on the old discipline with 50
+  concurrent writers: 46 failed writes and 49 of 50 keys lost. All writers now go
+  through one promise-chained lock and a per-write unique temp file; the same
+  burst against the real route is 18/18 successful with no lost keys.
+- The check-in badge no longer shadows the check-in action inside the row
+  renderer, which had made the per-account button call a badge object instead of
+  the action.
+- `set-checkin` no longer triggers a model-catalog refresh (or reports one as
+  having happened).
+
+## [0.2.0] - 2026-10-18
 
 ### Added
 
+- **Click coalescing for manual check-in.** The panel's buttons are cheap to press
+  and a sweep is not cheap to run, so both ends now collapse a burst into the run
+  that is already happening: the browser keeps the in-flight request in a ref and
+  returns it to every later click, and the host holds one process-wide
+  `sweepOnce` promise that the timer and the buttons share. Verified with
+  8 simultaneous clicks against a 4-account archive: 4 upstream calls, not 32.
+- **Daily check-in.** Each archived account now collects WorkBuddy's daily
+  check-in credits (100 a day) by calling
+  `POST /v2/billing/meter/checkin-activity-status` and
+  `POST /v2/billing/meter/daily-checkin` with the archive's own access token, so
+  neither the desktop app nor a second sign-in is involved. A pass runs 90
+  seconds after startup — which is what catches up a day missed while the machine
+  was off — and then every 30 minutes. Every account is settled at most once a
+  day, and the claim endpoint is idempotent per day, so a retry can never
+  double-credit.
+- **A check-in badge per account, and two manual triggers.** The panel shows
+  `+100 collected · streak 3`, `already +100 today`, `activity closed · ends …`,
+  `not applicable` (WorkBuddy AI) or `check-in failed · <reason>`, plus a
+  `check-in n/m today` tally in the header. "All accounts" runs the whole archive
+  and each card has its own button; both bypass the daily short-circuit and stay
+  idempotent. The feature has its own switch, independent of auto-rotation.
+- **`lib/checkin.js`**, which owns the check-in wire protocol: content-type-aware
+  reads (a `401` from this gateway is an HTML page, not JSON, so parsing
+  unconditionally would report `Unexpected token '<'`), a result classification
+  per account (`claimed` / `already` / `inactive` / `region` / `pending` /
+  `auth` / `network` / `unknown`), and per-day state keyed by the **server's**
+  date rather than the host's, so a wrong system clock cannot cause a double
+  claim.
+- **Token renewal for idle accounts.** A `401` during check-in refreshes that
+  archive's access token (the endpoint rotates the refresh token, so the new pair
+  is persisted) and retries once. Measured: the previous refresh token kept
+  working after a rotation, so an accidental double refresh degrades to a wasted
+  request rather than a dead login. The write is atomic, is abandoned if the file
+  changed under it, and leaves a `<uid>.json.bak` copy first.
+- **Retry backoff for transient failures** — 10 / 30 / 60 minutes, recorded in
+  `checkin.accounts[file].nextAttemptMs`. A rejected session is deliberately not
+  retried: waiting does not fix it, and eight attempts an hour at a dead login
+  would just add noise.
 - **Model-scoped cooldowns.** A `429 soft_rate` that named one model now benches
   only that model; the login stays in rotation for every other model, and the
   panel marks it as "`<model>` cooling until …" rather than as an exhausted
@@ -50,6 +106,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The route's request body cap went from 1 MB to 8 MB so a bundle with many
   accounts fits (each archive is about 2.3 KB; the route is loopback-only, so
   the cap bounds a local mistake rather than a remote attack).
+- `set-checkin` does not refresh the model catalog, and does not claim one
+  happened: a check-in toggle has nothing to do with the provider's catalog.
+- The check-in sweep is isolated from everything else: it is wrapped per account
+  and cannot reject into the host, so a broken check-in cannot disturb rotation,
+  reclaim or switching.
 
 ### Fixed
 

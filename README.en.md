@@ -14,12 +14,13 @@ Manage a pool of WorkBuddy accounts inside DeepSeek Harness and switch between t
 
 Across machines — the office and home, say — the archives are also independent: an account signed in on machine A has to be signed in again on machine B.
 
-This plugin does four things:
+This plugin does five things:
 
 1. **Account archive** — stores each account's credentials locally, so switching no longer requires the desktop app
 2. **One-click switching** — from the plugin settings card or a floating bottom-right button; the model list refreshes immediately
 3. **Automatic rotation** — on a quota failure it moves to the next account and retries, so the interruption is invisible
 4. **Cross-machine sync** — export one file, import it on the other machine, and the two archives line up
+5. **Daily check-in** — every account collects its 100 free credits each day, and a missed day is caught up after the next boot
 
 ## Features
 
@@ -87,6 +88,51 @@ Cooldown length:
 
 Cooldowns are persisted, survive restarts, expire on their own, and a once-a-minute sweep **switches back** to a better account afterwards.
 
+### Daily check-in
+
+Every archived account collects WorkBuddy's daily check-in credits (**100 credits a day** at the time of writing) without opening the desktop app.
+
+- **Catches up after a missed day** — one pass 90 seconds after startup, then every 30 minutes. The pass that was missed while the machine was off simply happens at the next boot.
+- **Idempotent** — the upstream de-duplicates per day; claiming twice answers "already checked in today" and grants nothing, so a retry cannot double-credit or double-charge.
+- **Only asks applicable accounts** — WorkBuddy AI (international) has no such activity; those archives are marked "not applicable" and no request is sent.
+- **Season-aware** — once the activity closes (`active: false`) the state is re-checked at most once a day, and the panel shows the closing date.
+- **Failures stay local** — one account's `401` or timeout never stops the others, and rotation/reclaim are untouched by anything the check-in does.
+
+Each row carries a badge: `+100 collected · streak 3` / `already +100 today · streak 12` /
+`check-in failed · token rejected` / `activity closed · ends 10-31`. The header shows
+`check-in 3/4 today`; the footer has the **daily check-in** switch and an **all accounts**
+button, and every card has its own **check in** button.
+
+> **Tokens renew themselves.** On a `401` the plugin exchanges the archive's refresh token
+> for a fresh access token and writes it back atomically — after re-reading the file and
+> abandoning the write if another writer got there first. That is what keeps a pool account
+> that has not been selected for weeks from silently going unable to check in.
+
+#### What each badge means
+
+| Badge | Meaning | What happens next |
+|---|---|---|
+| `+100 collected` | actually collected just now | no more requests for this account today |
+| `already +100 today` | collected earlier today (possibly by the app) | no more requests today |
+| `activity closed` | season not running or finished | at most one status query a day |
+| `not applicable` | WorkBuddy AI has no check-in | no request sent |
+| `check-in failed · token rejected` | 401/403, and the refresh did not help | no retry; the account needs a fresh sign-in |
+| `check-in failed · network` | timeout / 5xx / 429 | retried in 10 / 30 / 60 minutes |
+| `check-in failed · error` | any other business error | same backoff; hover for the raw `msg` |
+
+#### Manual check-in
+
+- **All accounts** — runs the whole archive right now, ignoring the "already collected today" short-circuit
+- **Per-account "check in"** — runs that one account only, for when a badge looks wrong
+
+Both are idempotent: pressing them after today's claim just answers "already checked in today".
+
+**Rapid clicking is safe.** A burst of clicks is collapsed into the run that is already
+happening rather than fanned out: the browser keeps the in-flight request in a
+`pendingCheckin` ref and hands it to every later click, and the host holds one process-wide
+`sweepOnce` promise shared with the timer. Measured: 8 simultaneous clicks against a
+4-account archive produced **4 upstream calls**, not 32.
+
 ### Passive reclaim
 
 A cooldown expiring only makes an account *eligible* again — it does not move the selection back. Every minute the plugin checks whether the current account is still the best healthy one and switches back if not.
@@ -126,10 +172,10 @@ Both read the same data:
 
 | Where | What |
 |---|---|
-| **Plugin settings page** | full list, account details, cooldown state, auto-rotate switch |
+| **Plugin settings page** | full list, account details, cooldown state, check-in state, auto-rotate and check-in switches |
 | **Bottom-right floating button** | quick switch popover |
 
-**Plugin settings page** (sidebar → Plugins → `dsh-workbuddy-switcher`): every account shows its region, cooldown countdown and refresh-token expiry, with the rotation switch at the bottom.
+**Plugin settings page** (sidebar → Plugins → `dsh-workbuddy-switcher`): every account shows its region, cooldown countdown, check-in badge and refresh-token expiry, with the two switches at the bottom.
 
 ![Plugin settings page](docs/plugin-page.png)
 
@@ -138,6 +184,15 @@ Both read the same data:
 ![Bottom-right floating button](docs/quick-switch.png)
 
 In both shots `4dba68a4` is cooling ("冷却至 10/19 09:56") — the state left behind after the plugin rotated away from it when its quota ran out — while `128a8f9c` is the account in use.
+
+**Daily check-in**: the header shows `check-in 4/4` for the current day, and every row carries its own state badge — `already +100 today · streak 12` means today's credits are in.
+
+![Daily check-in](docs/checkin.png)
+
+All four states of one day are visible there: already collected (streak 12 / streak 1), the account in
+use, and one login that simultaneously carries a model-scoped cooldown
+(`deepseek-v4.1-flash`, cooling until 10/19 09:56) yet still checked in fine — **cooldowns and
+check-in do not interfere**.
 
 ## Install
 
@@ -292,7 +347,8 @@ Date.UTC(y, m - 1, d, h, min, s) - 8 * 3600 * 1000
 | Path | Contents |
 |---|---|
 | `~/.dsh/workbuddy-accounts/<uid>.json` | credential archive (**plaintext**) |
-| `~/.dsh/workbuddy-switcher.json` | current selection + cooldown table |
+| `~/.dsh/workbuddy-accounts/<uid>.json.bak` | automatic backup taken before a check-in token refresh (for a manual rollback) |
+| `~/.dsh/workbuddy-switcher.json` | current selection + cooldown table + check-in records |
 
 A cooldown entry takes one of two shapes, depending on its scope:
 
@@ -329,6 +385,35 @@ The selection and its hold live in the same file:
 Deleting `holdUntilMs`, or moving it into the past, returns that account to automatic
 scheduling immediately.
 
+Check-in records live in the same file, keyed by archive name:
+
+```json
+{
+  "checkin": {
+    "enabled": true,
+    "lastSweepAt": 1792329408764,
+    "accounts": {
+      "128a8f9c-….json": {
+        "result": "already",
+        "day": "2026-10-18",
+        "credit": 100,
+        "streakDays": 12,
+        "totalCredits": 1200,
+        "endTime": "2026-10-31 23:59:59",
+        "attempts": 1,
+        "atMs": 1792329408070,
+        "nextAttemptMs": 1792333008070
+      }
+    }
+  }
+}
+```
+
+- `day` is the **server's** date, not the host's — changing the system clock cannot make it claim twice
+- `result` is one of `claimed` / `already` / `inactive` / `region` / `pending` / `auth` / `network` / `unknown`
+- `nextAttemptMs` exists only for `network` / `unknown`, and suppresses retries until it passes
+- deleting `checkin.accounts` resets today's memory; the next pass re-queries every account
+
 ### Security
 
 Archives hold **plaintext accessToken / refreshToken**.
@@ -336,6 +421,9 @@ Archives hold **plaintext accessToken / refreshToken**.
 - do not commit them
 - do not put them on a shared drive
 - do not keep only an unencrypted backup
+
+> Check-in sends the access token to `www.codebuddy.cn` and `copilot.tencent.com` — the same
+> hosts the plugin already uses for the balance read, so no third party is added.
 
 > On "can I force a signed-out device off after a leak?": **no**. WorkBuddy only supports account-level revocation (change the password); there is no per-session or per-device kill switch. Verified experimentally: signing out in the desktop app does not revoke issued tokens, `sid` is unchanged, and tokens slide forward indefinitely. Keeping the archive file safe is the only defence.
 
@@ -391,6 +479,44 @@ It should not within 24 hours. If it does, the hold is not in effect:
 
 Delete `selected.holdUntilMs` from the state file, or set it to a past instant.
 
+### A check-in did not land
+
+Read the badge first:
+
+| Badge | What to do |
+|---|---|
+| `already +100 today` | nothing; come back tomorrow |
+| `check-in failed · token rejected` | that account needs a fresh sign-in (sign in in the app, then "Import current account") |
+| `check-in failed · network` | the next pass retries in 10 minutes; the per-account button retries immediately |
+| `activity closed` | the season ended or has not started; the badge shows the closing date |
+| no badge at all | nothing has swept yet. Press "All accounts"; `checkin.lastSweepAt` updates |
+
+If nothing at all happens, confirm DSH was restarted — the host-side timers are only
+registered at startup.
+
+### Does rapid clicking double-claim or hang?
+
+No. Both the browser and the host collapse a burst into one pass (see "Manual check-in"),
+and credits are de-duplicated per day upstream, so a repeat claim only answers
+"already checked in today".
+
+> v0.2.0 and earlier had a real defect here: every state write shared one fixed temp
+> filename (`workbuddy-switcher.json.tmp`), so concurrent writers raced and the second
+> `rename` failed with `ENOENT` — a click could return a 500 or lose state. Since v0.2.1
+> all writes go through one serialising lock and use a unique temp name per write. Measured
+> on the old discipline with 50 concurrent writers: 46 failed writes, 1 of 50 keys survived;
+> the same 18-request burst against the real route now succeeds 18/18.
+
+### Did the check-in log my account out?
+
+No. It does exactly three things: read the status, claim, and — on a `401` — refresh the
+token once.
+
+The refresh rotates the refresh token, so writing it back is load-bearing. The plugin
+re-reads the file first and abandons the write when its access token is no longer the one
+the refresh started from, so a concurrent writer wins instead of being clobbered. A copy of
+the pre-refresh archive is left at `<uid>.json.bak` for a manual rollback.
+
 ## Limitations
 
 - **Rotation only covers archived accounts.** In "follow the client" mode the plugin will not switch away, since that would silently change accounts.
@@ -398,6 +524,8 @@ Delete `selected.holdUntilMs` from the state file, or set it to a past instant.
 - **The limit's scope is inferred.** The upstream may answer "this model is throttled" and "the balance is gone" with the same 429. The plugin separates them by whether the message carries credit wording: with it the account is benched, without it only the model is. When the model cannot be determined it falls back to the account scope (conservative).
 - **A manual choice gives up a small optimisation.** For 24 hours the plugin will not return to the account with the longer-lived refresh token; that is deliberate — your choice outranks that optimisation.
 - **Archives are plaintext.** See the security note above.
+- **The check-in endpoint is private.** It was reverse-engineered from the desktop client, so a WorkBuddy release can break it; a break shows up as `check-in failed · error` and affects nothing else. This plugin claims the check-in itself (100 credits a day) and deliberately leaves the growth-centre rewards alone.
+- **The check-in day is the server's.** The host's time zone does not affect it, which also means "today" follows the UTC+8 calendar while travelling.
 
 ## License
 
