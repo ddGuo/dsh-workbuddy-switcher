@@ -77,19 +77,28 @@ In both shots `4dba68a4` is cooling ("冷却至 10/19 09:56") — the state left
 ### Requirements
 
 - DSH `0.2.1-rc.2` or newer
-- `dsh-workbuddy-connect@0.7.8` or newer (optional, but without it there is nothing to switch)
 - at least one WorkBuddy account signed in on this machine
 
-### Install
+### dsh-workbuddy-connect must be installed separately
+
+This plugin does **not** pull `dsh-workbuddy-connect` in. That package is a `peerDependency`, and DSH profiles set `autoInstallPeers: false`, so installing this plugin installs only itself (measured: `Packages: +1`).
+
+Declaring it as a hard dependency would drag in **87 packages**, and could produce two `dsh-workbuddy-connect` instances — one at the profile root, one inside this plugin's `node_modules`. The two would read different `process.env` objects, which breaks switching. Leaving it out is deliberate.
+
+Install both:
 
 ```powershell
+# 1. the model bridge
+dsh plugin --profile desktop add dsh-workbuddy-connect@0.7.8
+
+# 2. the account switcher
 dsh plugin --profile desktop add "file:E:\dsh\dsh-workbuddy-switcher"
 ```
 
-Or from git:
+Or install this plugin from git:
 
 ```powershell
-dsh plugin --profile desktop add "git+https://github.com/<you>/dsh-workbuddy-switcher.git"
+dsh plugin --profile desktop add "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git"
 ```
 
 > **Note**: a `file:` install **copies** rather than symlinks. After editing the sources, re-sync:

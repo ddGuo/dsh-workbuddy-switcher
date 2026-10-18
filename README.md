@@ -79,19 +79,28 @@
 ### 前置
 
 - DSH `0.2.1-rc.2` 或更新的内核
-- 已安装 `dsh-workbuddy-connect@0.7.8` 或更新（可选，但不装则无法切换模型）
 - 本机已登录过至少一个 WorkBuddy 账号
 
-### 安装
+### 需要单独安装 dsh-workbuddy-connect
+
+本插件**不会自动带上** `dsh-workbuddy-connect`。后者声明为 `peerDependency`，而 DSH profile 使用 `autoInstallPeers: false`，所以装本插件时只会安装它自己（实测 `Packages: +1`）。
+
+如果改成硬依赖，安装会连带拉进 **87 个包**——而且可能出现两份 `dsh-workbuddy-connect` 实例：一份在 profile 顶层、一份在插件的 `node_modules` 里。两个实例读到的是不同的 `process.env`，切换就会失效。所以这个「不自动安装」是有意的。
+
+两个都装：
 
 ```powershell
+# 1. 先装 WorkBuddy 模型接入
+dsh plugin --profile desktop add dsh-workbuddy-connect@0.7.8
+
+# 2. 再装账号切换
 dsh plugin --profile desktop add "file:E:\dsh\dsh-workbuddy-switcher"
 ```
 
-或从 git 安装：
+从 git 安装本插件：
 
 ```powershell
-dsh plugin --profile desktop add "git+https://github.com/<you>/dsh-workbuddy-switcher.git"
+dsh plugin --profile desktop add "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git"
 ```
 
 > **注意**：`file:` 安装是**复制**不是软链接。修改源码后需要重新同步到 profile：

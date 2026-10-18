@@ -37,6 +37,9 @@
     "dsh-workbuddy-connect": ">=0.7.8"
   },
   "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": {
+      "optional": true
+    },
     "dsh-workbuddy-connect": {
       "optional": true
     }
