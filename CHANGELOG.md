@@ -32,6 +32,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   edge. Pointing at the dot slides it out on hover (160ms), so its account name
   can be read before clicking; it slides back on leave, and the peek is never
   written to storage. Touch devices keep the click-only behaviour.
+- **The hover peek flickered on the chat scrollbar.** The pill slid out to a
+  fixed 20px gap, which on the right edge is *left* of where the dot was: the
+  cursor that triggered the hover ended up outside the pill, the hover ended,
+  the pill retracted under the cursor, and the two states chased each other.
+  The docked edge now stays put and the pill grows inward from it, so the
+  pointer that entered the dot is still over the pill.
 - **The popover dismissed only through its own close button.** A press anywhere
   outside it, or Escape, now closes it as well; presses inside it and on the
   launcher itself are left alone.

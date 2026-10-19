@@ -127,8 +127,8 @@ test('drag parks the launcher against the nearest edge and one click brings it b
   const saved = h.storage.get('dsh-workbuddy-switcher:fab-position');
   assert.equal(harness(saved).render().style.right, 986);
   assert.equal(h.event('onClick', { detail: 0 })['aria-expanded'], true);
-  // Clicking the dot expands it again beside that edge.
-  assert.equal(h.render().style.right, 800);
+  // Clicking the dot brings it back out on the same edge it was parked on.
+  assert.equal(h.render().style.right, 1000 - 180);
 });
 
 test('drops on the right side park on the right edge, and the title bar is kept clear', () => {
@@ -142,7 +142,7 @@ test('drops on the right side park on the right edge, and the title bar is kept 
   // Dragged high: the top stops below the 32px window drag handle.
   assert.ok(h.render().style.bottom >= 40, `bottom=${h.render().style.bottom}`);
   h.event('onClick', { detail: 0 });
-  assert.equal(h.render().style.right, 20);
+  assert.equal(h.render().style.right, 0, 'comes out flush with the right edge');
 });
 
 test('hovering a parked dot slides the full launcher out, without saving that spot', () => {
@@ -154,10 +154,12 @@ test('hovering a parked dot slides the full launcher out, without saving that sp
   assert.equal(h.render().style.width, 28);
   const parked = h.storage.get('dsh-workbuddy-switcher:fab-position');
 
-  // Mouse over the dot: it slid out to the same edge, full size, still docked.
+  // Mouse over the dot: the pill grows inward from the docked edge, so the
+  // pointer that entered the dot is still over the pill. Sliding it to a fixed
+  // gap instead leaves the cursor outside, and the hover then flickers.
   const hovered = h.event('onPointerEnter', { pointerType: 'mouse' });
-  assert.equal(hovered.style.width, undefined);
-  assert.equal(hovered.style.right, 20);
+  assert.equal(hovered.style.width, undefined, 'full pill on hover');
+  assert.equal(hovered.style.right, 0, 'outer edge stays put');
   assert.equal(h.storage.get('dsh-workbuddy-switcher:fab-position'), parked);
 
   // Leaving puts it back, and the stored spot never moved.
@@ -165,6 +167,16 @@ test('hovering a parked dot slides the full launcher out, without saving that sp
   assert.equal(left.style.right, -14);
   assert.equal(left.style.width, 28);
   assert.equal(h.storage.get('dsh-workbuddy-switcher:fab-position'), parked);
+});
+
+test('a parked launcher keeps its docked edge on the left side too', () => {
+  const h = harness();
+  h.event('onPointerDown');
+  h.event('onPointerMove', { clientX: 100, clientY: 600 });
+  h.event('onPointerUp');
+  assert.equal(h.render().style.right, 986, 'parked on the left edge');
+  const hovered = h.event('onPointerEnter', { pointerType: 'mouse' });
+  assert.equal(hovered.style.right, 1000 - 180, 'grows inward from the left edge');
 });
 
 test('touch and keyboard never trigger the hover peek', () => {
