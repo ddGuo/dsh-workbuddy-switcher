@@ -211,7 +211,7 @@ dsh plugin --profile desktop add "dsh-workbuddy-connect@^0.7.8" "git+https://git
 ```
 
 > - 写 `^0.7.8` 而不是 `@latest`：`latest` 标签在镜像上可能仍指向旧版（实测解析到 0.7.7，被内核的版本兼容检查拒掉）。
-> - 已经是 `file:` 安装的，这条会顺手换成 git 来源（实测 `- dsh-workbuddy-switcher` / `+ dsh-workbuddy-switcher 0.1.0`）；想继续用本地源码，改用下面「从本地源码装」那条。
+> - 已经是 `file:` 安装的，这条会顺手换成 git 来源（实测 `- dsh-workbuddy-switcher` / `+ dsh-workbuddy-switcher 0.2.2`）；想继续用本地源码，改用下面「从本地源码装」那条。
 > - 对**同一个** `file:` 路径重复 `add`，pnpm 只会回 `Already up to date`，改过的源码不会同步过去。
 
 ### 需要单独安装 dsh-workbuddy-connect
