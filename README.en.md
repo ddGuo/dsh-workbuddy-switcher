@@ -179,7 +179,9 @@ Both read the same data:
 
 ![Plugin settings page](docs/plugin-page.png)
 
-**Floating button** (bottom-right by default): switch without leaving the conversation; the popover carries the same cooldown state, import action and per-account "clear cooldown". Drag it with a mouse or touch; its position is saved in the current browser and kept within the viewport on resize. Clicking or pressing Enter / Space still toggles the popover.
+**Floating button** (bottom-right by default): switch without leaving the conversation; the popover carries the same cooldown state, import action and per-account "clear cooldown". Drag it with a mouse or touch; on release it docks to the nearest side like a floating ball and shows only a small dot until you click it. Its position is saved in the current browser and kept within the viewport on resize. It never comes to rest inside the window's title-bar drag strip — dropped there, the next drag would move the whole window and the button could no longer be grabbed. Clicking or pressing Enter / Space still toggles the popover.
+
+Accounts are named after the WorkBuddy nickname decrypted at import; an older archive without one shows its uid until "Rename" is used in the settings card, which changes only the local label and never the credential.
 
 ![Bottom-right floating button](docs/quick-switch.png)
 

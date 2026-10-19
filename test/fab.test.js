@@ -46,15 +46,23 @@ function harness(saved = null, blocked = false) {
     if (props.ref) props.ref.current = button;
     return { type, props };
   };
+  const attributes = new Set();
+  const document = {
+    documentElement: {
+      style: { getPropertyValue: (name) => (name === '--dsh-windows-titlebar-height' ? '32px' : '') },
+      hasAttribute: (name) => attributes.has(name),
+    },
+  };
   const context = vm.createContext({
-    react, window, jsx, jsxs: jsx,
+    react, window, jsx, jsxs: jsx, document, SNAP_SIZE: 28,
     localStorage: {
       getItem(key) { if (blocked) throw Error('blocked'); return storage.get(key); },
       setItem(key, value) { if (blocked) throw Error('blocked'); storage.set(key, value); },
     },
     ResizeObserver: class { constructor(fn) { observer = fn; } observe() {} disconnect() {} },
     useAccounts: () => ({ state: undefined }),
-    styles: { fab: {}, panel: {}, overlay: {} }, zh: { noActive: 'follow', fabLabel: 'switch' },
+    styles: { fab: {}, panel: {}, overlay: {} },
+    zh: { noActive: 'follow', fabLabel: 'switch', fabExpand: 'expand' },
     labelOf: () => '', Footer() {}, AccountList() {},
   });
   vm.runInContext(`${component}\nglobalThis.Component = SwitcherFab;`, context);
@@ -87,19 +95,37 @@ test('click, small jitter, and keyboard retain normal toggle behavior', () => {
   assert.equal(h.event('onClick', { detail: 0 })['aria-expanded'], false);
 });
 
-test('drag persists position and suppresses only its pointer click', () => {
+test('drag parks the launcher against the nearest edge and one click brings it back', () => {
   const h = harness();
   const before = h.storage.get('dsh-workbuddy-switcher:fab-position');
   h.event('onPointerDown');
-  h.event('onPointerMove', { clientX: 300, clientY: 400 });
+  h.event('onPointerMove', { clientX: 100, clientY: 400 });
   assert.equal(h.storage.get('dsh-workbuddy-switcher:fab-position'), before);
   h.event('onPointerUp');
-  assert.equal(h.render().style.right, 220);
+  // Released with its centre left of the screen's middle: parked on the left
+  // edge, half the dot off-screen.
+  assert.equal(h.render().style.right, 986);
   assert.equal(h.render().style.bottom, 116);
+  assert.equal(h.render().style.width, 28);
   assert.equal(h.event('onClick')['aria-expanded'], false);
   const saved = h.storage.get('dsh-workbuddy-switcher:fab-position');
-  assert.equal(harness(saved).render().style.right, 220);
+  assert.equal(harness(saved).render().style.right, 986);
   assert.equal(h.event('onClick', { detail: 0 })['aria-expanded'], true);
+  // Clicking the dot expands it again beside that edge.
+  assert.equal(h.render().style.right, 800);
+});
+
+test('drops on the right side park on the right edge, and the title bar is kept clear', () => {
+  const h = harness();
+  h.event('onPointerDown');
+  h.event('onPointerMove', { clientX: 990, clientY: 5 });
+  h.event('onPointerUp');
+  // Near the right edge: parked there, not swapped to the left.
+  assert.equal(h.render().style.right, -14);
+  // Dragged high: the top stops below the 32px window drag handle.
+  assert.ok(h.render().style.bottom >= 40, `bottom=${h.render().style.bottom}`);
+  h.event('onClick', { detail: 0 });
+  assert.equal(h.render().style.right, 20);
 });
 
 test('viewport edges, resize, and size changes keep launcher and panel accessible', () => {

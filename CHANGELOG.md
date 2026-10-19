@@ -6,9 +6,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Changed
+### Fixed
 
-- Next release notes go here.
+- **The floating launcher could be dropped into the window title bar and become
+  unreachable.** Its only upper bound was the viewport edge, but on DSH Windows
+  the top strip is the window's own drag handle: once the button came to rest
+  there, the next drag moved the window instead and the button could not be
+  grabbed again. Its top edge now stops below `--dsh-windows-titlebar-height`,
+  the same variable DSH's floating panes read (and 0 in fullscreen).
+- **Account names were unreadable uids.** "Import current account" only copied
+  `account.uid`: the WorkBuddy nickname arrives in an at-rest encrypted
+  `account.nickname` field that the token parser drops, so a library of logins
+  showed a column of hex. The import now decrypts that field with the same
+  at-rest key it already fetches for the tokens. Accounts archived before this
+  can be given a local name with the new **Rename** button.
+
+### Added
+
+- **Edge docking.** Released anywhere, the launcher parks against the nearer
+  side showing only its dot, and a click brings the full pill back beside that
+  edge.
 
 ## [0.2.3] - 2026-10-19
 
