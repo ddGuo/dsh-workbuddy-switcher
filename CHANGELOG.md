@@ -46,6 +46,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   account, and a softer shadow — the list and the action bar no longer scroll
   as one long column.
 
+### Documented
+
+- **A `400` from the upstream is not routed around by this plugin.** Switching
+  accounts resends the same request body, so when the body is longer than the
+  model's context window every account answers `400`; rotation only fires on
+  quota-class failures. Both READMEs now say so and point at `/compact` (or a
+  fresh session) as the actual remedy, rather than leaving the failure to look
+  like a switching bug.
+
 ## [0.2.3] - 2026-10-19
 
 ### Fixed

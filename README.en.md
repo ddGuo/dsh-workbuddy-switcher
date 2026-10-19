@@ -526,6 +526,28 @@ re-reads the file first and abandons the write when its access token is no longe
 the refresh started from, so a concurrent writer wins instead of being clobbered. A copy of
 the pre-refresh archive is left at `<uid>.json.bak` for a manual rollback.
 
+### A chat answers 400, and switching accounts does not help
+
+**That is not something this plugin can fix, and rotation will not route around it.**
+
+An upstream `400` means the request itself is unacceptable. The common case is
+**context longer than the model's window**: a session that has run long, a large file or image
+pasted in, or a lot of tool history — the body has grown past what the model accepts. Resending
+the same body under another account gets the same rejection, so automatic rotation does not fire
+(it only switches on quota-class failures, `429` / `402`).
+
+What actually helps is to **compact the context by hand**:
+
+1. run `/compact` in the session — DSH replaces the history with a summary ("上下文已压缩");
+2. or start a new session and carry the conclusions over.
+
+After that the request is normally sized again and the same account keeps working.
+
+> For what it is worth: every failure other than "rate limited / out of credit" is treated as
+> **do not switch**, so a `400`, `401` or `500` will never have an account marked as cooling.
+> If the `400` mentions `token`, `context_length_exceeded` or `messages`, this is almost
+> certainly the case above.
+
 ## Limitations
 
 - **Rotation only covers archived accounts.** In "follow the client" mode the plugin will not switch away, since that would silently change accounts.
