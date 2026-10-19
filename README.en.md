@@ -179,7 +179,7 @@ Both read the same data:
 
 ![Plugin settings page](docs/plugin-page.png)
 
-**Bottom-right floating button**: switch without leaving the conversation; the popover carries the same cooldown state, import action and per-account "clear cooldown".
+**Floating button** (bottom-right by default): switch without leaving the conversation; the popover carries the same cooldown state, import action and per-account "clear cooldown". Drag it with a mouse or touch; its position is saved in the current browser and kept within the viewport on resize. Clicking or pressing Enter / Space still toggles the popover.
 
 ![Bottom-right floating button](docs/quick-switch.png)
 
