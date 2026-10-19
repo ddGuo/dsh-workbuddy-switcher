@@ -209,14 +209,21 @@ Hand the line below to the Agent already running on this machine (this DSH sessi
 Install the dsh-workbuddy-switcher plugin (https://github.com/ddGuo/dsh-workbuddy-switcher): install it if missing, update it if it is not the latest, and do the same for the plugin it depends on, dsh-workbuddy-connect (https://github.com/corrinehu/dsh-workbuddy-connect). When done, remind me to fully quit and relaunch DSH.
 ```
 
-Or run the equivalent command yourself — **re-running it is the update**:
+Or run the equivalent command yourself — **re-running it is the update**, pinned to the current release:
+
+```powershell
+dsh plugin --profile desktop add "dsh-workbuddy-connect@^0.7.8" "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git#v0.2.2" --config.strict-dep-builds=false
+```
+
+To follow the trunk instead (every `add` pulls the newest commit):
 
 ```powershell
 dsh plugin --profile desktop add "dsh-workbuddy-connect@^0.7.8" "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git" --config.strict-dep-builds=false
 ```
 
+> - The `#v0.2.2` above is a **fixed release tag** and never drifts; drop it to follow the newest commit on `main`. Use tags for a settled install, `main` while developing.
 > - `^0.7.8` rather than `@latest`: on mirrors the `latest` tag can still point at an old build (it resolved to 0.7.7 here and was rejected by the runtime's compatibility check).
-> - If this plugin is already installed from a `file:` path, this command switches it to the git source (`- dsh-workbuddy-switcher` / `+ dsh-workbuddy-switcher 0.1.0` in the run above); to stay on your local checkout, use the local-source command below instead.
+> - If this plugin is already installed from a `file:` path, this command switches it to the git source (`- dsh-workbuddy-switcher` / `+ dsh-workbuddy-switcher 0.2.2` in the run above); to stay on your local checkout, use the local-source command below instead.
 > - Re-`add`ing the **same** `file:` path only prints `Already up to date` — edited sources are not copied over.
 
 ### dsh-workbuddy-connect must be installed separately

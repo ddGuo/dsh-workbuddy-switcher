@@ -12,6 +12,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   blocking the bottom-right composer controls. Its position is stored per browser,
   clamped on resize, and the popover follows it without leaving the viewport.
   Dragging does not accidentally open the panel; keyboard activation is preserved.
+## [0.2.2] - 2026-10-19
+
+### Changed
+
+- **Version bump only** — released to make the current `main` installable by
+  version (and to mark the point after the check-in, per-model cooldown and
+  24-hour hold work landed). No behavioural change from 0.2.1.
 
 ## [0.2.1] - 2026-10-18
 
