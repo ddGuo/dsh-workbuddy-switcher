@@ -207,7 +207,7 @@ WorkBuddy 对**单个模型被限流**和**账号积分用尽**返回的是同�
 自己跑也行，等价的一条命令（**重复执行即更新**，固定在当前发布的版本）：
 
 ```powershell
-dsh plugin --profile desktop add "dsh-workbuddy-connect@^0.7.8" "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git#v0.2.2" --config.strict-dep-builds=false
+dsh plugin --profile desktop add "dsh-workbuddy-connect@^0.7.8" "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git#v0.2.3" --config.strict-dep-builds=false
 ```
 
 想跟随主干（每次 `add` 都拉最新提交）：
@@ -216,9 +216,9 @@ dsh plugin --profile desktop add "dsh-workbuddy-connect@^0.7.8" "git+https://git
 dsh plugin --profile desktop add "dsh-workbuddy-connect@^0.7.8" "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git" --config.strict-dep-builds=false
 ```
 
-> - 上面的 `#v0.2.2` 是**固定的发布标签**，不会随时间漂移；去掉它就变成跟随 `main` 的最新提交。生产环境建议用标签，本地开发用 `main`。
+> - 上面的 `#v0.2.3` 是**固定的发布标签**，不会随时间漂移；去掉它就变成跟随 `main` 的最新提交。生产环境建议用标签，本地开发用 `main`。
 > - 写 `^0.7.8` 而不是 `@latest`：`latest` 标签在镜像上可能仍指向旧版（实测解析到 0.7.7，被内核的版本兼容检查拒掉）。
-> - 已经是 `file:` 安装的，这条会顺手换成 git 来源（实测 `- dsh-workbuddy-switcher` / `+ dsh-workbuddy-switcher 0.2.2`）；想继续用本地源码，改用下面「从本地源码装」那条。
+> - 已经是 `file:` 安装的，这条会顺手换成 git 来源（实测 `- dsh-workbuddy-switcher` / `+ dsh-workbuddy-switcher 0.2.3`）；想继续用本地源码，改用下面「从本地源码装」那条。
 > - 对**同一个** `file:` 路径重复 `add`，pnpm 只会回 `Already up to date`，改过的源码不会同步过去。
 
 ### 需要单独安装 dsh-workbuddy-connect

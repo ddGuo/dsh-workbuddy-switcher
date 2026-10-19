@@ -6,12 +6,47 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- Next release notes go here.
+
+## [0.2.3] - 2026-10-19
+
 ### Fixed
+
+- **"Import current account" failed on every machine but the original author's.**
+  The plugin runs the WorkBuddy binary as a decryption oracle — the at-rest key
+  lives in the app's own Electron binding — but fell back to a hardcoded path:
+
+  ```js
+  const electron = process.env['WORKBUDDY_ELECTRON_BIN'] ?? 'D:\\WorkBuddy\\WorkBuddy.exe';
+  ```
+
+  WorkBuddy installs to `%LOCALAPPDATA%\Programs\WorkBuddy` by default, so anyone
+  who took the default and never set the override got
+  `spawnSync D:\WorkBuddy\WorkBuddy.exe ENOENT` on the plugin's entry-point action
+  — the account library could not be filled at all. The executable is now
+  discovered instead: the explicit override first, then the registry
+  (`DisplayIcon` / `InstallLocation`, which the installer writes even for a custom
+  directory), then the usual install roots. A machine with no WorkBuddy at all now
+  gets an error naming `WORKBUDDY_ELECTRON_BIN` and listing what was tried, rather
+  than a bare `ENOENT`.
+
+### Added
 
 - The floating account switcher can be dragged with a mouse or touch instead of
   blocking the bottom-right composer controls. Its position is stored per browser,
   clamped on resize, and the popover follows it without leaving the viewport.
   Dragging does not accidentally open the panel; keyboard activation is preserved.
+  (Merged after the 0.2.2 tag was cut, so it first ships here.)
+
+### Tests
+
+- `test/electron-bin.test.js` pins the executable discovery: override precedence,
+  the default install location, both registry shapes, the Program Files fallbacks,
+  de-duplication, and the actionable failure. It fails against 0.2.2.
+- `test/fab.test.js` (from the drag PR) still passes.
+
 ## [0.2.2] - 2026-10-19
 
 ### Changed
