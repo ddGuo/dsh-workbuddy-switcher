@@ -43,12 +43,23 @@ function harness(saved = null, blocked = false) {
     removeEventListener: (name) => listeners.delete(name),
   };
   const jsx = (type, props) => {
-    if (props.ref) props.ref.current = button;
+    if (props.ref) {
+      // Two refs are in play: the launcher button and the panel container. Their
+      // `contains` has to answer for the marker each test passes in.
+      const node = props.role === 'dialog' ? 'panel' : 'launcher';
+      props.ref.current = {
+        ...button,
+        contains: (target) => target?.node === node,
+      };
+    }
     return { type, props };
   };
   const attributes = new Set();
   let titlebarHeight = 0;
+  const documentListeners = new Map();
   const document = {
+    addEventListener: (name, fn) => documentListeners.set(name, fn),
+    removeEventListener: (name) => documentListeners.delete(name),
     documentElement: {
       style: { getPropertyValue: (name) => (name === '--dsh-windows-titlebar-height' ? `${titlebarHeight}px` : '') },
       hasAttribute: (name) => attributes.has(name),
@@ -84,6 +95,9 @@ function harness(saved = null, blocked = false) {
   render();
   return { render, event, storage, window, panel: () => tree.props.children[1]?.props,
     setTitlebar(pixels) { titlebarHeight = pixels; attributes.add('data-windows-titlebar'); render(); },
+    // Dispatch through the listeners the component registered on `document`.
+    press(node) { documentListeners.get('pointerdown')?.({ target: node }); render(); },
+    key(name) { documentListeners.get('keydown')?.({ key: name }); render(); },
     resize(width, height) { window.innerWidth = width; window.innerHeight = height; listeners.get('resize')(); render(); },
     observer: () => { observer(); render(); } };
 }
@@ -159,6 +173,32 @@ test('touch and keyboard never trigger the hover peek', () => {
   h.event('onPointerMove', { clientX: 990, clientY: 600 });
   h.event('onPointerUp');
   assert.equal(h.event('onPointerEnter', { pointerType: 'touch' }).style.width, 28);
+});
+
+test('a press outside the panel closes it; inside, the launcher, and Escape behave', () => {
+  const h = harness();
+  h.event('onClick');
+  assert.ok(h.panel(), 'panel should be open');
+
+  // A press inside the panel must not dismiss it mid-interaction.
+  h.press({ node: 'panel' });
+  assert.ok(h.panel(), 'inside press keeps it open');
+
+  // The launcher's own press is left to its click handler, which toggles.
+  h.press({ node: 'launcher' });
+  assert.ok(h.panel(), 'launcher press keeps it open');
+
+  // Anywhere else in the window closes it.
+  h.press({ node: 'chat' });
+  assert.equal(h.panel(), undefined);
+});
+
+test('Escape closes the open panel', () => {
+  const h = harness();
+  h.event('onClick');
+  assert.ok(h.panel());
+  h.key('Escape');
+  assert.equal(h.panel(), undefined);
 });
 
 test('viewport edges, resize, and size changes keep launcher and panel accessible', () => {

@@ -32,6 +32,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   edge. Pointing at the dot slides it out on hover (160ms), so its account name
   can be read before clicking; it slides back on leave, and the peek is never
   written to storage. Touch devices keep the click-only behaviour.
+- **The popover dismissed only through its own close button.** A press anywhere
+  outside it, or Escape, now closes it as well; presses inside it and on the
+  launcher itself are left alone.
+- **Popover chrome.** A fixed header with the panel title and a small ✕, a
+  scrolling body, cards with a tinted fill and an accent edge on the active
+  account, and a softer shadow — the list and the action bar no longer scroll
+  as one long column.
 
 ## [0.2.3] - 2026-10-19
 
