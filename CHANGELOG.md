@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- The floating account switcher can be dragged with a mouse or touch instead of
+  blocking the bottom-right composer controls. Its position is stored per browser,
+  clamped on resize, and the popover follows it without leaving the viewport.
+  Dragging does not accidentally open the panel; keyboard activation is preserved.
 ## [0.2.2] - 2026-10-19
 
 ### Changed
