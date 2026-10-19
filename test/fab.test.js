@@ -47,9 +47,10 @@ function harness(saved = null, blocked = false) {
     return { type, props };
   };
   const attributes = new Set();
+  let titlebarHeight = 0;
   const document = {
     documentElement: {
-      style: { getPropertyValue: (name) => (name === '--dsh-windows-titlebar-height' ? '32px' : '') },
+      style: { getPropertyValue: (name) => (name === '--dsh-windows-titlebar-height' ? `${titlebarHeight}px` : '') },
       hasAttribute: (name) => attributes.has(name),
     },
   };
@@ -82,6 +83,7 @@ function harness(saved = null, blocked = false) {
   }
   render();
   return { render, event, storage, window, panel: () => tree.props.children[1]?.props,
+    setTitlebar(pixels) { titlebarHeight = pixels; attributes.add('data-windows-titlebar'); render(); },
     resize(width, height) { window.innerWidth = width; window.innerHeight = height; listeners.get('resize')(); render(); },
     observer: () => { observer(); render(); } };
 }
@@ -117,6 +119,7 @@ test('drag parks the launcher against the nearest edge and one click brings it b
 
 test('drops on the right side park on the right edge, and the title bar is kept clear', () => {
   const h = harness();
+  h.setTitlebar(32);
   h.event('onPointerDown');
   h.event('onPointerMove', { clientX: 990, clientY: 5 });
   h.event('onPointerUp');
@@ -140,6 +143,19 @@ test('viewport edges, resize, and size changes keep launcher and panel accessibl
   assert.equal(h.panel().style.top, 52);
   assert.equal(h.panel().style.right, 20);
   assert.equal(h.panel().style.maxHeight, 420);
+});
+
+test('a panel opened upward stops below the title bar instead of covering the window controls', () => {
+  // Default spot, ordinary window: far more room above than below, so the panel
+  // opens upward — it used to reach y=8 and cover minimise/maximise/close.
+  const h = harness();
+  h.resize(1280, 820);
+  h.setTitlebar(32);
+  h.event('onClick');
+  const up = h.panel().style;
+  const top = 820 - up.bottom - up.maxHeight;
+  assert.ok(top >= 40, `panel top ${top} must clear the 32px title bar`);
+  assert.equal(up.bottom, 16 + 36 + 8);
 });
 
 test('invalid or blocked storage does not prevent rendering and dragging', () => {

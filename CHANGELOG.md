@@ -14,6 +14,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   there, the next drag moved the window instead and the button could not be
   grabbed again. Its top edge now stops below `--dsh-windows-titlebar-height`,
   the same variable DSH's floating panes read (and 0 in fullscreen).
+- **The expanded panel covered the window controls.** It chose its height from
+  the viewport alone, so opening upward from the default corner reached y=8 and
+  sat on top of minimise / maximise / close. The ceiling is now the same title
+  bar line the launcher respects, and the list scrolls inside that height.
 - **Account names were unreadable uids.** "Import current account" only copied
   `account.uid`: the WorkBuddy nickname arrives in an at-rest encrypted
   `account.nickname` field that the token parser drops, so a library of logins
