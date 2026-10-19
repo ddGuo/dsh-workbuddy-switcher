@@ -131,6 +131,36 @@ test('drops on the right side park on the right edge, and the title bar is kept 
   assert.equal(h.render().style.right, 20);
 });
 
+test('hovering a parked dot slides the full launcher out, without saving that spot', () => {
+  const h = harness();
+  h.event('onPointerDown');
+  h.event('onPointerMove', { clientX: 990, clientY: 600 });
+  h.event('onPointerUp');
+  assert.equal(h.render().style.right, -14);
+  assert.equal(h.render().style.width, 28);
+  const parked = h.storage.get('dsh-workbuddy-switcher:fab-position');
+
+  // Mouse over the dot: it slid out to the same edge, full size, still docked.
+  const hovered = h.event('onPointerEnter', { pointerType: 'mouse' });
+  assert.equal(hovered.style.width, undefined);
+  assert.equal(hovered.style.right, 20);
+  assert.equal(h.storage.get('dsh-workbuddy-switcher:fab-position'), parked);
+
+  // Leaving puts it back, and the stored spot never moved.
+  const left = h.event('onPointerLeave');
+  assert.equal(left.style.right, -14);
+  assert.equal(left.style.width, 28);
+  assert.equal(h.storage.get('dsh-workbuddy-switcher:fab-position'), parked);
+});
+
+test('touch and keyboard never trigger the hover peek', () => {
+  const h = harness();
+  h.event('onPointerDown');
+  h.event('onPointerMove', { clientX: 990, clientY: 600 });
+  h.event('onPointerUp');
+  assert.equal(h.event('onPointerEnter', { pointerType: 'touch' }).style.width, 28);
+});
+
 test('viewport edges, resize, and size changes keep launcher and panel accessible', () => {
   const h = harness(JSON.stringify({ right: 9999, bottom: 9999 }));
   assert.equal(h.render().style.right, 812);

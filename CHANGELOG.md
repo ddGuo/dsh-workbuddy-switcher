@@ -29,7 +29,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **Edge docking.** Released anywhere, the launcher parks against the nearer
   side showing only its dot, and a click brings the full pill back beside that
-  edge.
+  edge. Pointing at the dot slides it out on hover (160ms), so its account name
+  can be read before clicking; it slides back on leave, and the peek is never
+  written to storage. Touch devices keep the click-only behaviour.
 
 ## [0.2.3] - 2026-10-19
 
