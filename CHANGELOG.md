@@ -6,9 +6,54 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Changed
+### Fixed
 
-- Next release notes go here.
+- **The floating launcher could be dropped into the window title bar and become
+  unreachable.** Its only upper bound was the viewport edge, but on DSH Windows
+  the top strip is the window's own drag handle: once the button came to rest
+  there, the next drag moved the window instead and the button could not be
+  grabbed again. Its top edge now stops below `--dsh-windows-titlebar-height`,
+  the same variable DSH's floating panes read (and 0 in fullscreen).
+- **The expanded panel covered the window controls.** It chose its height from
+  the viewport alone, so opening upward from the default corner reached y=8 and
+  sat on top of minimise / maximise / close. The ceiling is now the same title
+  bar line the launcher respects, and the list scrolls inside that height.
+- **Account names were unreadable uids.** "Import current account" only copied
+  `account.uid`: the WorkBuddy nickname arrives in an at-rest encrypted
+  `account.nickname` field that the token parser drops, so a library of logins
+  showed a column of hex. The import now decrypts that field with the same
+  at-rest key it already fetches for the tokens. Accounts archived before this
+  can be given a local name with the new **Rename** button.
+
+### Added
+
+- **Edge docking.** Released anywhere, the launcher parks against the nearer
+  side showing only its dot, and a click brings the full pill back beside that
+  edge. Pointing at the dot slides it out on hover (160ms), so its account name
+  can be read before clicking; it slides back on leave, and the peek is never
+  written to storage. Touch devices keep the click-only behaviour.
+- **The hover peek flickered on the chat scrollbar.** The pill slid out to a
+  fixed 20px gap, which on the right edge is *left* of where the dot was: the
+  cursor that triggered the hover ended up outside the pill, the hover ended,
+  the pill retracted under the cursor, and the two states chased each other.
+  The docked edge now stays put and the pill grows inward from it, so the
+  pointer that entered the dot is still over the pill.
+- **The popover dismissed only through its own close button.** A press anywhere
+  outside it, or Escape, now closes it as well; presses inside it and on the
+  launcher itself are left alone.
+- **Popover chrome.** A fixed header with the panel title and a small ✕, a
+  scrolling body, cards with a tinted fill and an accent edge on the active
+  account, and a softer shadow — the list and the action bar no longer scroll
+  as one long column.
+
+### Documented
+
+- **A `400` from the upstream is not routed around by this plugin.** Switching
+  accounts resends the same request body, so when the body is longer than the
+  model's context window every account answers `400`; rotation only fires on
+  quota-class failures. Both READMEs now say so and point at `/compact` (or a
+  fresh session) as the actual remedy, rather than leaving the failure to look
+  like a switching bug.
 
 ## [0.2.3] - 2026-10-19
 

@@ -43,18 +43,38 @@ function harness(saved = null, blocked = false) {
     removeEventListener: (name) => listeners.delete(name),
   };
   const jsx = (type, props) => {
-    if (props.ref) props.ref.current = button;
+    if (props.ref) {
+      // Two refs are in play: the launcher button and the panel container. Their
+      // `contains` has to answer for the marker each test passes in.
+      const node = props.role === 'dialog' ? 'panel' : 'launcher';
+      props.ref.current = {
+        ...button,
+        contains: (target) => target?.node === node,
+      };
+    }
     return { type, props };
   };
+  const attributes = new Set();
+  let titlebarHeight = 0;
+  const documentListeners = new Map();
+  const document = {
+    addEventListener: (name, fn) => documentListeners.set(name, fn),
+    removeEventListener: (name) => documentListeners.delete(name),
+    documentElement: {
+      style: { getPropertyValue: (name) => (name === '--dsh-windows-titlebar-height' ? `${titlebarHeight}px` : '') },
+      hasAttribute: (name) => attributes.has(name),
+    },
+  };
   const context = vm.createContext({
-    react, window, jsx, jsxs: jsx,
+    react, window, jsx, jsxs: jsx, document, SNAP_SIZE: 28,
     localStorage: {
       getItem(key) { if (blocked) throw Error('blocked'); return storage.get(key); },
       setItem(key, value) { if (blocked) throw Error('blocked'); storage.set(key, value); },
     },
     ResizeObserver: class { constructor(fn) { observer = fn; } observe() {} disconnect() {} },
     useAccounts: () => ({ state: undefined }),
-    styles: { fab: {}, panel: {}, overlay: {} }, zh: { noActive: 'follow', fabLabel: 'switch' },
+    styles: { fab: {}, panel: {}, overlay: {} },
+    zh: { noActive: 'follow', fabLabel: 'switch', fabExpand: 'expand' },
     labelOf: () => '', Footer() {}, AccountList() {},
   });
   vm.runInContext(`${component}\nglobalThis.Component = SwitcherFab;`, context);
@@ -74,6 +94,10 @@ function harness(saved = null, blocked = false) {
   }
   render();
   return { render, event, storage, window, panel: () => tree.props.children[1]?.props,
+    setTitlebar(pixels) { titlebarHeight = pixels; attributes.add('data-windows-titlebar'); render(); },
+    // Dispatch through the listeners the component registered on `document`.
+    press(node) { documentListeners.get('pointerdown')?.({ target: node }); render(); },
+    key(name) { documentListeners.get('keydown')?.({ key: name }); render(); },
     resize(width, height) { window.innerWidth = width; window.innerHeight = height; listeners.get('resize')(); render(); },
     observer: () => { observer(); render(); } };
 }
@@ -87,19 +111,106 @@ test('click, small jitter, and keyboard retain normal toggle behavior', () => {
   assert.equal(h.event('onClick', { detail: 0 })['aria-expanded'], false);
 });
 
-test('drag persists position and suppresses only its pointer click', () => {
+test('drag parks the launcher against the nearest edge and one click brings it back', () => {
   const h = harness();
   const before = h.storage.get('dsh-workbuddy-switcher:fab-position');
   h.event('onPointerDown');
-  h.event('onPointerMove', { clientX: 300, clientY: 400 });
+  h.event('onPointerMove', { clientX: 100, clientY: 400 });
   assert.equal(h.storage.get('dsh-workbuddy-switcher:fab-position'), before);
   h.event('onPointerUp');
-  assert.equal(h.render().style.right, 220);
+  // Released with its centre left of the screen's middle: parked on the left
+  // edge, half the dot off-screen.
+  assert.equal(h.render().style.right, 986);
   assert.equal(h.render().style.bottom, 116);
+  assert.equal(h.render().style.width, 28);
   assert.equal(h.event('onClick')['aria-expanded'], false);
   const saved = h.storage.get('dsh-workbuddy-switcher:fab-position');
-  assert.equal(harness(saved).render().style.right, 220);
+  assert.equal(harness(saved).render().style.right, 986);
   assert.equal(h.event('onClick', { detail: 0 })['aria-expanded'], true);
+  // Clicking the dot brings it back out on the same edge it was parked on.
+  assert.equal(h.render().style.right, 1000 - 180);
+});
+
+test('drops on the right side park on the right edge, and the title bar is kept clear', () => {
+  const h = harness();
+  h.setTitlebar(32);
+  h.event('onPointerDown');
+  h.event('onPointerMove', { clientX: 990, clientY: 5 });
+  h.event('onPointerUp');
+  // Near the right edge: parked there, not swapped to the left.
+  assert.equal(h.render().style.right, -14);
+  // Dragged high: the top stops below the 32px window drag handle.
+  assert.ok(h.render().style.bottom >= 40, `bottom=${h.render().style.bottom}`);
+  h.event('onClick', { detail: 0 });
+  assert.equal(h.render().style.right, 0, 'comes out flush with the right edge');
+});
+
+test('hovering a parked dot slides the full launcher out, without saving that spot', () => {
+  const h = harness();
+  h.event('onPointerDown');
+  h.event('onPointerMove', { clientX: 990, clientY: 600 });
+  h.event('onPointerUp');
+  assert.equal(h.render().style.right, -14);
+  assert.equal(h.render().style.width, 28);
+  const parked = h.storage.get('dsh-workbuddy-switcher:fab-position');
+
+  // Mouse over the dot: the pill grows inward from the docked edge, so the
+  // pointer that entered the dot is still over the pill. Sliding it to a fixed
+  // gap instead leaves the cursor outside, and the hover then flickers.
+  const hovered = h.event('onPointerEnter', { pointerType: 'mouse' });
+  assert.equal(hovered.style.width, undefined, 'full pill on hover');
+  assert.equal(hovered.style.right, 0, 'outer edge stays put');
+  assert.equal(h.storage.get('dsh-workbuddy-switcher:fab-position'), parked);
+
+  // Leaving puts it back, and the stored spot never moved.
+  const left = h.event('onPointerLeave');
+  assert.equal(left.style.right, -14);
+  assert.equal(left.style.width, 28);
+  assert.equal(h.storage.get('dsh-workbuddy-switcher:fab-position'), parked);
+});
+
+test('a parked launcher keeps its docked edge on the left side too', () => {
+  const h = harness();
+  h.event('onPointerDown');
+  h.event('onPointerMove', { clientX: 100, clientY: 600 });
+  h.event('onPointerUp');
+  assert.equal(h.render().style.right, 986, 'parked on the left edge');
+  const hovered = h.event('onPointerEnter', { pointerType: 'mouse' });
+  assert.equal(hovered.style.right, 1000 - 180, 'grows inward from the left edge');
+});
+
+test('touch and keyboard never trigger the hover peek', () => {
+  const h = harness();
+  h.event('onPointerDown');
+  h.event('onPointerMove', { clientX: 990, clientY: 600 });
+  h.event('onPointerUp');
+  assert.equal(h.event('onPointerEnter', { pointerType: 'touch' }).style.width, 28);
+});
+
+test('a press outside the panel closes it; inside, the launcher, and Escape behave', () => {
+  const h = harness();
+  h.event('onClick');
+  assert.ok(h.panel(), 'panel should be open');
+
+  // A press inside the panel must not dismiss it mid-interaction.
+  h.press({ node: 'panel' });
+  assert.ok(h.panel(), 'inside press keeps it open');
+
+  // The launcher's own press is left to its click handler, which toggles.
+  h.press({ node: 'launcher' });
+  assert.ok(h.panel(), 'launcher press keeps it open');
+
+  // Anywhere else in the window closes it.
+  h.press({ node: 'chat' });
+  assert.equal(h.panel(), undefined);
+});
+
+test('Escape closes the open panel', () => {
+  const h = harness();
+  h.event('onClick');
+  assert.ok(h.panel());
+  h.key('Escape');
+  assert.equal(h.panel(), undefined);
 });
 
 test('viewport edges, resize, and size changes keep launcher and panel accessible', () => {
@@ -114,6 +225,19 @@ test('viewport edges, resize, and size changes keep launcher and panel accessibl
   assert.equal(h.panel().style.top, 52);
   assert.equal(h.panel().style.right, 20);
   assert.equal(h.panel().style.maxHeight, 420);
+});
+
+test('a panel opened upward stops below the title bar instead of covering the window controls', () => {
+  // Default spot, ordinary window: far more room above than below, so the panel
+  // opens upward — it used to reach y=8 and cover minimise/maximise/close.
+  const h = harness();
+  h.resize(1280, 820);
+  h.setTitlebar(32);
+  h.event('onClick');
+  const up = h.panel().style;
+  const top = 820 - up.bottom - up.maxHeight;
+  assert.ok(top >= 40, `panel top ${top} must clear the 32px title bar`);
+  assert.equal(up.bottom, 16 + 36 + 8);
 });
 
 test('invalid or blocked storage does not prevent rendering and dragging', () => {
