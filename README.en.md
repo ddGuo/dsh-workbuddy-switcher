@@ -175,11 +175,11 @@ Both read the same data:
 | **Plugin settings page** | full list, account details, cooldown state, check-in state, auto-rotate and check-in switches |
 | **Bottom-right floating button** | quick switch popover |
 
-**Plugin settings page** (sidebar → Plugins → `dsh-workbuddy-switcher`): every account shows its region, cooldown countdown, check-in badge and refresh-token expiry, with the two switches at the bottom.
+**Plugin settings page** (sidebar → Plugins → `dsh-workbuddy-switcher`): every account shows its region, cooldown countdown, check-in badge and refresh-token expiry, with a small "clear" button directly behind each cooldown countdown, and the two switches at the bottom.
 
 ![Plugin settings page](docs/plugin-page.png)
 
-**Floating button** (bottom-right by default): switch without leaving the conversation; the popover carries the same cooldown state, import action and per-account "clear cooldown". Drag it with a mouse or touch; its position is saved in the current browser and kept within the viewport on resize. Clicking or pressing Enter / Space still toggles the popover.
+**Floating button** (bottom-right by default): switch without leaving the conversation; the popover carries the same cooldown state and import action, and each cooldown badge is followed by its own small "clear" button. Drag it with a mouse or touch; its position is saved in the current browser and kept within the viewport on resize. Clicking or pressing Enter / Space still toggles the popover.
 
 ![Bottom-right floating button](docs/quick-switch.png)
 
@@ -269,7 +269,32 @@ On by default. The switch sits at the bottom of the card: **"Rotate when quota r
 
 ### Clear a cooldown manually
 
-If an account is still marked as cooling but you know its quota is back, click "Clear cooldown".
+If an account is still marked as cooling but you know its quota is back, click the **"clear" chip sitting right after that cooldown badge**.
+
+Every cooldown is one badge-plus-chip group, and the chip clears only the badge to its left.
+The two render as an unbreakable inline group, so a wrapping row can never separate them:
+
+- **account scope** — the badge reads "account quota, cooling until …"; hovering the chip
+  shows the recorded cooldown reason (or a generic hint when none was recorded), and clicking
+  it drops the whole account's cooldown
+- **model scope** — the badge reads "model-name, cooling until …"; the chip drops that one
+  model only, leaving every other cooldown on the same login intact, and its tooltip says
+  just that: this model is limited, the rest of the account still works
+
+The chip always reads "clear"; its scope is carried by which badge it sits behind, with the
+accessible name spelling that scope out (`解除冷却：账号额度` for the account,
+`解除该模型冷却：<model>` for a model) and the tooltip explaining it on hover. That fixes a
+real problem: with two model-scoped cooldowns on one account, the earlier UI rendered two
+identical "clear this model's cooldown" buttons side by side in the action bar, and nothing
+said which model a click would unbench. No clear button is rendered in the action bar any
+more — the bottom of the card holds only "Switch to this account", "Delete" and "Check in".
+
+![cooldown buttons, before and after](docs/cooldown-clear.png)
+
+Before (top): the account-wide and two model-scoped cooldowns sat in the name row while their
+clear buttons lived down in the action bar, rendering as two identical "clear this model's
+cooldown" buttons. After (bottom): every cooldown badge is followed immediately by its own
+compact "clear" chip, and the action bar keeps only "Delete" and "Check in".
 
 ### Sync to another machine
 
@@ -459,11 +484,9 @@ Almost certainly a wrong archive shape. The top-level keys must be `auth` / `acc
 
 ### Stuck in cooldown though the quota is back
 
-Click "Clear cooldown".
+Click the "clear" chip **immediately to the right of that cooldown badge**. Badge and chip are one unbreakable inline group, so a wrapped row will not put them on separate lines.
 
-When the badge names a **model** (say "claude-sonnet-4-5 cooling until …"), the button reads
-"Clear this model's cooldown" and drops only that model's limit, leaving any other
-cooldown on the same login in place.
+When the badge names a **model** (say "claude-sonnet-4-5 cooling until …"), that chip drops only that model's limit, leaving any other cooldown on the same login in place; when the badge says "account quota, cooling until …", the chip is the one that clears the whole account.
 
 ### Telling an exhausted login from a throttled model
 
@@ -473,6 +496,11 @@ Look at the badge:
 - **"model-name, cooling until …"** → that model alone is limited; another model on the same login still works
 
 A dimmed badge marks a cooldown that does not affect the currently routed model.
+
+The chip behind a badge touches that badge's scope and nothing else: an account-scoped chip
+clears the account, a model-scoped chip clears that model. When both are live the card shows
+two groups — one click each, which is exactly why the buttons moved out of the action bar and
+next to the badges they clear.
 
 ### A manual switch jumped back on its own
 

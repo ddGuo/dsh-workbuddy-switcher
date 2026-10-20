@@ -8,7 +8,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- Next release notes go here.
+- **Clear-cooldown buttons moved from the shared action bar to the cooldown each one clears.**
+  Every live cooldown badge is now immediately followed by its own small "clear" chip, the two
+  rendered as one unbreakable inline group so a wrapping row cannot separate them. With two
+  model-scoped cooldowns on one account the old layout put two identical "clear this model's
+  cooldown" buttons side by side in the action bar, and nothing said which model a click would
+  unbench; the chip now just reads "clear", its scope is the badge it sits behind, and the
+  accessible name plus tooltip spell that scope out. The action bar keeps only "Switch to
+  this account", "Delete" and "Check in". The badge is what narrows on a small popover, so a
+  long model id reflows rather than pushing the chip out of the card.
+
+### Tests
+
+- `test/cooldown-clear.test.js` renders the shipped `AccountList` and pins the pairing: one
+  unbreakable group per live scope, the chip clearing exactly the scope behind it (action
+  payload and busy label included), distinct accessible names for the account and model cases,
+  and no clear button left in the action bar. It fails against 0.2.3.
 
 ## [0.2.3] - 2026-10-19
 
