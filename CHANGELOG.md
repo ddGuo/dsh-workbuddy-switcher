@@ -8,6 +8,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Next release notes go here.
+
+## [0.2.4] - 2026-10-20
+
+### Changed
+
 - **Clear-cooldown buttons moved from the shared action bar to the cooldown each one clears.**
   Every live cooldown badge is now immediately followed by its own small "clear" chip, the two
   rendered as one unbreakable inline group so a wrapping row cannot separate them. With two
