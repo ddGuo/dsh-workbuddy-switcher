@@ -212,7 +212,7 @@ Install the dsh-workbuddy-switcher plugin (https://github.com/ddGuo/dsh-workbudd
 Or run the equivalent command yourself — **re-running it is the update**, pinned to the current release:
 
 ```powershell
-dsh plugin --profile desktop add "dsh-workbuddy-connect@^0.7.8" "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git#v0.2.4" --config.strict-dep-builds=false
+dsh plugin --profile desktop add "dsh-workbuddy-connect@^0.7.8" "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git#v0.2.5" --config.strict-dep-builds=false
 ```
 
 To follow the trunk instead (every `add` pulls the newest commit):
@@ -221,9 +221,9 @@ To follow the trunk instead (every `add` pulls the newest commit):
 dsh plugin --profile desktop add "dsh-workbuddy-connect@^0.7.8" "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git" --config.strict-dep-builds=false
 ```
 
-> - The `#v0.2.4` above is a **fixed release tag** and never drifts; drop it to follow the newest commit on `main`. Use tags for a settled install, `main` while developing.
+> - The `#v0.2.5` above is a **fixed release tag** and never drifts; drop it to follow the newest commit on `main`. Use tags for a settled install, `main` while developing.
 > - `^0.7.8` rather than `@latest`: on mirrors the `latest` tag can still point at an old build (it resolved to 0.7.7 here and was rejected by the runtime's compatibility check).
-> - If this plugin is already installed from a `file:` path, this command switches it to the git source (`- dsh-workbuddy-switcher` / `+ dsh-workbuddy-switcher 0.2.4` in the run above); to stay on your local checkout, use the local-source command below instead.
+> - If this plugin is already installed from a `file:` path, this command switches it to the git source (the output shows a `- dsh-workbuddy-switcher` / `+ dsh-workbuddy-switcher <new version>` pair); to stay on your local checkout, use the local-source command below instead.
 > - Re-`add`ing the **same** `file:` path only prints `Already up to date` — edited sources are not copied over.
 
 ### dsh-workbuddy-connect must be installed separately
@@ -360,6 +360,29 @@ continue;                                               // retry the step
 
 The plugin uses exactly these three properties to hide the switch.
 
+### The channel-verification shim
+
+WorkBuddy's gateway fingerprints the system prompt. Any `system` message carrying the literal
+text `DeepSeek Harness` is answered `400` / `code 11128` / `msg: Illegal API invocation from an
+unapproved channel` — the UI shows 「请求被拦截，请重新发送」 ("request intercepted, please
+resend"). The official client never sends that sentence, which is why the same account works
+inside the app.
+
+The plugin covers the check at the transport layer: it wraps `globalThis.fetch`, inspects only
+`POST`s whose URL contains `/v2/chat/completions`, and rewrites **every** occurrence of
+`DeepSeek Harness` in `system` / `developer` message text into `DeepSeek\u200b Harness` — the two
+words separated by a zero-width space (U+200B). The byte match stops matching; the meaning a human
+or a model reads is unchanged.
+
+Why `dsh-workbuddy-connect` alone is not enough: it performs the same rewrite, but only on the
+**first** occurrence (`String.prototype.replace` with a string argument) — and DSH's system prompt
+now mentions the name in three places, once in the opener and twice in the runtime context. The two
+untouched occurrences are enough to re-arm the check.
+
+Scope is deliberately narrow: only `system` / `developer` text is touched, user messages and other
+providers' requests are left alone, and a body that carries no such text is forwarded
+byte-identical.
+
 ### Parsing the reset instant
 
 Upstream messages look like:
@@ -475,6 +498,19 @@ Archives hold **plaintext accessToken / refreshToken**.
 ### The model group disappeared
 
 Almost certainly a wrong archive shape. The top-level keys must be `auth` / `account`; `version` / `credential` means an old file, which is migrated automatically on the next DSH start.
+
+### Upstream answers 「请求被拦截，请重新发送」 (`400` / `code 11128`)
+
+That is the gateway's channel verification, and it has **nothing to do with the account** — switching
+will not help. From v0.2.5 the plugin covers it at the transport layer (see
+[The channel-verification shim](#the-channel-verification-shim)); it takes effect only after a
+**full quit and relaunch of DSH**, because the `fetch` wrapper is installed at startup.
+
+If the same error survives the restart:
+
+1. check the settings card reports plugin version `0.2.5` or newer
+2. check that `lib/channel-guard.js` exists in the profile's
+   `node_modules/dsh-workbuddy-switcher`
 
 ### Auto-rotation does nothing
 

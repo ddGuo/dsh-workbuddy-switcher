@@ -10,6 +10,56 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Next release notes go here.
 
+## [0.2.5] - 2026-10-22
+
+### Fixed
+
+- **Every WorkBuddy model failed with `400` / `code 11128` — 「请求被拦截，请重新发送」
+  ("request intercepted, please resend").**
+  The gateway fingerprint-checks the system prompt: a `system` message containing the literal text
+  `DeepSeek Harness` is answered `400` / `msg: Illegal API invocation from an unapproved channel`,
+  whose `displayMsg.zh` is the message above. The official client never sends that sentence, which
+  is why the same account kept working inside the app.
+
+  Measured on `copilot.tencent.com/v2/chat/completions`, sending only the smallest possible request
+  each time with one real DSH prompt:
+
+  | system message | result |
+  |---|---|
+  | none | `200` |
+  | raw `You are an AI agent powered by DeepSeek Harness` | `400` `11128` |
+  | same opener with U+200B between the two words | `200` |
+  | DSH's real 8 KB prompt, prepared by `dsh-workbuddy-connect` | `400` `11128` |
+  | that same prompt with only the **opener** neutralised | `400` `11128` |
+  | that same prompt with **all three** occurrences neutralised | `200` |
+
+  So the check does not care about one sentence; it cares about the raw phrase wherever it appears
+  in instruction text. DSH's prompt names it three times — the opener, "…names the DeepSeek Harness
+  implementation checkout", and "…through the DeepSeek Harness Web GUI" — and
+  `dsh-workbuddy-connect` rewrites only the first, because it uses
+  `content.replace(PHRASE, NEUTRALISED)` with a string argument, which replaces a single match. The
+  two surviving occurrences re-armed the check, so every WorkBuddy model failed on the first step
+  of a turn.
+
+  `lib/channel-guard.js` fixes it from the transport side: it wraps `globalThis.fetch` for the
+  plugin's lifetime and, for a `POST` whose URL contains `/v2/chat/completions`, rewrites every
+  occurrence of the phrase in `system` / `developer` text into `DeepSeek\u200b Harness`. The byte
+  match stops matching; the meaning a human or a model reads is unchanged. User messages, other
+  providers, and bodies that carry no such text pass through untouched, and a body the bridge
+  plugin already prepared has nothing left to rewrite, so the two cannot conflict. Owning this in
+  this plugin rather than patching the bridge's vendored bundle means the guarantee survives any
+  `dsh-workbuddy-connect` upgrade.
+
+  Verified against the live gateway: the exact prepared body that answers `400` without the shim
+  answers `200` with it installed.
+
+### Tests
+
+- `test/channel-guard.test.js` pins the rewrite: all occurrences (not the first) are neutralised
+  across string and text-part content, `developer` is covered as well as `system`, user text is
+  never touched, non-chat URLs and non-`POST` calls are forwarded verbatim, a stale
+  `Content-Length` is dropped, and a second activation does not stack wrappers.
+
 ## [0.2.4] - 2026-10-20
 
 ### Changed

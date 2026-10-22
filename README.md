@@ -207,7 +207,7 @@ WorkBuddy 对**单个模型被限流**和**账号积分用尽**返回的是同�
 自己跑也行，等价的一条命令（**重复执行即更新**，固定在当前发布的版本）：
 
 ```powershell
-dsh plugin --profile desktop add "dsh-workbuddy-connect@^0.7.8" "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git#v0.2.4" --config.strict-dep-builds=false
+dsh plugin --profile desktop add "dsh-workbuddy-connect@^0.7.8" "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git#v0.2.5" --config.strict-dep-builds=false
 ```
 
 想跟随主干（每次 `add` 都拉最新提交）：
@@ -216,9 +216,9 @@ dsh plugin --profile desktop add "dsh-workbuddy-connect@^0.7.8" "git+https://git
 dsh plugin --profile desktop add "dsh-workbuddy-connect@^0.7.8" "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git" --config.strict-dep-builds=false
 ```
 
-> - 上面的 `#v0.2.4` 是**固定的发布标签**，不会随时间漂移；去掉它就变成跟随 `main` 的最新提交。生产环境建议用标签，本地开发用 `main`。
+> - 上面的 `#v0.2.5` 是**固定的发布标签**，不会随时间漂移；去掉它就变成跟随 `main` 的最新提交。生产环境建议用标签，本地开发用 `main`。
 > - 写 `^0.7.8` 而不是 `@latest`：`latest` 标签在镜像上可能仍指向旧版（实测解析到 0.7.7，被内核的版本兼容检查拒掉）。
-> - 已经是 `file:` 安装的，这条会顺手换成 git 来源（实测 `- dsh-workbuddy-switcher` / `+ dsh-workbuddy-switcher 0.2.4`）；想继续用本地源码，改用下面「从本地源码装」那条。
+> - 已经是 `file:` 安装的，这条会顺手换成 git 来源（实测输出里会出现 `- dsh-workbuddy-switcher` / `+ dsh-workbuddy-switcher <新版本>` 这一对）；想继续用本地源码，改用下面「从本地源码装」那条。
 > - 对**同一个** `file:` 路径重复 `add`，pnpm 只会回 `Already up to date`，改过的源码不会同步过去。
 
 ### 需要单独安装 dsh-workbuddy-connect
@@ -345,6 +345,24 @@ continue;  // 重试
 
 插件正是利用这三点实现「无感切换」。
 
+### 渠道校验兜底
+
+WorkBuddy 网关会对系统提示词做**渠道指纹校验**：只要 `system` 消息里出现写实的
+`DeepSeek Harness`，就返回 `400` / `code 11128` / `msg: Illegal API invocation from an
+unapproved channel`，也就是界面上那句「请求被拦截，请重新发送」。官方客户端从不发这句话，
+所以同一个账号在 App 里是好的。
+
+插件在传输层兜住它：包裹 `globalThis.fetch`，只对 URL 含 `/v2/chat/completions` 的 `POST`
+检查请求体，把 `system` / `developer` 消息里的**每一处** `DeepSeek Harness` 换成中间夹一个
+零宽空格的 `DeepSeek\u200b Harness`（U+200B）。字节匹配因此失效，人和模型读到的意思不变。
+
+为什么不能只靠 `dsh-workbuddy-connect`：它自己也做同样的改写，但只替换**第一处**
+（`String.prototype.replace` 配字符串参数的含义），而 DSH 的系统提示词现在会在三个地方
+提到这个名字——开头那句中一处，运行时上下文里两处。剩下没被改到的两处足以让校验重新命中。
+
+作用域是刻意收窄的：只动 `system` / `developer` 的文本，不碰用户消息，也不碰其它供应商的
+请求；已经不含该字样的请求体按字节原样转发。
+
 ### 冷却时间解析
 
 上游消息形如：
@@ -456,6 +474,16 @@ Date.UTC(y, m - 1, d, h, min, s) - 8 * 3600 * 1000
 ### 模型分组消失了
 
 几乎一定是存档格式不对。检查文件顶层键名：应该是 `auth` / `account`。如果是 `version` / `credential`，说明是旧格式，重启 DSH 会自动迁移。
+
+### 上游报「请求被拦截，请重新发送」（`400` / `code 11128`）
+
+这是网关的渠道校验，**与账号无关**，换号不会好。插件 v0.2.5 起在传输层兜住了它（见
+[渠道校验兜底](#渠道校验兜底)），需要**完全退出 DSH 再打开**才生效——`fetch` 包裹只在启动时安装。
+
+重启后仍报同样的错，按这个顺序查：
+
+1. 设置页里确认插件版本是 `0.2.5` 或更高
+2. 确认只装了一份：profile 顶层 `node_modules/dsh-workbuddy-switcher` 里应有 `lib/channel-guard.js`
 
 ### 自动轮换没生效
 

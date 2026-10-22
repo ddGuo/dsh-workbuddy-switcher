@@ -2,7 +2,7 @@
   "name": "dsh-workbuddy-switcher",
   "displayName": "DSH WorkBuddy Switcher",
   "description": "Manage a local pool of WorkBuddy accounts and switch between them inside DeepSeek Harness — with automatic rotation when an account runs out of quota.",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "author": "guoding",
   "keywords": [
     "dsh-plugin",
