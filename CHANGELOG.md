@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- Next release notes go here.
+
+## [0.2.6] - 2026-10-25
+
 ### Added
 
 - **Account rows carry the masked phone, and a newly signed-in account adds itself to the library.**
