@@ -363,6 +363,20 @@ unapproved channel`，也就是界面上那句「请求被拦截，请重新发�
 作用域是刻意收窄的：只动 `system` / `developer` 的文本，不碰用户消息，也不碰其它供应商的
 请求；已经不含该字样的请求体按字节原样转发。
 
+### 验证方式
+
+本 README 里凡是写着「实测」的结论，都来自可以重跑的脚本，而不是推理：
+
+| 结论 | 怎么得到的 |
+|---|---|
+| 400 是系统提示词里的字样触发的 | 只改 `system` 内容、其余字节不变，逐个变体发最小请求对比状态码 |
+| 只改第一处不够 | 同一份真实 8 KB 提示词，分别只改第一处 / 改全部，前者 `400`、后者 `200` |
+| `rc.2` 与 `rc.3` 只差版本号 | `npm pack` 拉两个版本，解包后递归逐文件比对字节；六个包合计仅 `package.json` 有差异 |
+
+最后一条的具体做法：把两个版本的包都解到本地目录，遍历所有文件（跳过 `node_modules`）比较内容，
+并对差异文件再做一次行级 diff —— 结果只有 `package.json` 变化，且变化仅限 `version` 与它自己内部的
+`@deepseek-ai/*` 依赖版本号。
+
 ### 冷却时间解析
 
 上游消息形如：
@@ -474,6 +488,39 @@ Date.UTC(y, m - 1, d, h, min, s) - 8 * 3600 * 1000
 ### 模型分组消失了
 
 几乎一定是存档格式不对。检查文件顶层键名：应该是 `auth` / `account`。如果是 `version` / `credential`，说明是旧格式，重启 DSH 会自动迁移。
+
+### DSH 升级后提示「与当前 DSH 不兼容」
+
+`dsh-workbuddy-connect` 把 6 个 DSH 运行包**精确锁死**在它发版时的版本：
+
+```
+@deepseek-ai/dsh-attachment     0.2.1-rc.2
+@deepseek-ai/dsh-home-paths     0.2.1-rc.2
+@deepseek-ai/dsh-host-webserver 0.2.1-rc.2
+@deepseek-ai/dsh-llm            0.2.1-rc.2
+@deepseek-ai/dsh-llm-pi-ai      0.2.1-rc.2
+@deepseek-ai/dsh-settings       0.2.1-rc.2
+```
+
+DSH 一升级（比如到 `0.2.1-rc.3`），兼容性检查就会把这个插件拦在组合阶段，**WorkBuddy 模型整体消失**，插件页给出「请卸载后重新安装与当前 DSH 兼容的版本」。npm 上最新的 `0.7.9` 也是同样的精确锁，所以「重装」并不能解决。
+
+这是**声明问题，不是真的不兼容**：逐包对比 `0.2.1-rc.2` 与 `0.2.1-rc.3`，六个包**只有 `package.json` 里的版本号不同，代码与类型声明逐字节一致**（见 [验证方式](#验证方式)）。
+
+DSH 为此提供了官方豁免机制，不需要改任何人的代码：
+
+```powershell
+# 1. 授权：把「包名@精确版本」放到「允许的运行版本」白名单里
+dsh plugin --profile desktop allow-version "dsh-workbuddy-connect@0.7.8" --dsh-version "$(dsh --version)" --accept-risk
+
+# 2. 确认
+dsh plugin --profile desktop version-exemptions
+
+# 3. 完全退出 DSH 再打开
+```
+
+授权写进 `<profile>/compatibility.json`，键是 `包名@版本 → 允许的运行版本列表`，**重启依然有效，重装插件也不丢**；但**DSH 每升级一次都要重新授权**（官方设计如此：只豁免那一对精确版本）。撤销用 `revoke-version`。
+
+> 根因修复应该在上游：给 `dsh-workbuddy-connect` 加上 `engines.dsh: ">=0.2.1-rc.2 <0.3.0-0"`，或者把 peer 改成范围。它一天不改，DSH 每升一次就要豁免一次。
 
 ### 上游报「请求被拦截，请重新发送」（`400` / `code 11128`）
 

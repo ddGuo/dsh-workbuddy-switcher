@@ -383,6 +383,20 @@ Scope is deliberately narrow: only `system` / `developer` text is touched, user 
 providers' requests are left alone, and a body that carries no such text is forwarded
 byte-identical.
 
+### How the measurements were made
+
+Every claim in this README marked as measured comes from a re-runnable script, not from reasoning:
+
+| Claim | How it was established |
+|---|---|
+| the `400` is triggered by text in the system prompt | vary only the `system` content, keep every other byte fixed, send the smallest request, compare status codes |
+| neutralising only the first occurrence is not enough | one real 8 KB prompt, first-occurrence-only vs all-occurrences: `400` vs `200` |
+| `rc.2` and `rc.3` differ only in their version string | `npm pack` both versions, unpack, walk every file and compare bytes; across the six packages only `package.json` differs |
+
+The last one in detail: both versions of each package were extracted side by side, every file compared
+(recursively, skipping `node_modules`), and the differing file diffed line by line — the only changes
+are the `version` field and that package's own internal `@deepseek-ai/*` pins.
+
 ### Parsing the reset instant
 
 Upstream messages look like:
@@ -498,6 +512,49 @@ Archives hold **plaintext accessToken / refreshToken**.
 ### The model group disappeared
 
 Almost certainly a wrong archive shape. The top-level keys must be `auth` / `account`; `version` / `credential` means an old file, which is migrated automatically on the next DSH start.
+
+### After a DSH upgrade: "incompatible with the running DSH"
+
+`dsh-workbuddy-connect` pins six DSH runtime packages to the **exact** versions it was built against:
+
+```
+@deepseek-ai/dsh-attachment     0.2.1-rc.2
+@deepseek-ai/dsh-home-paths     0.2.1-rc.2
+@deepseek-ai/dsh-host-webserver 0.2.1-rc.2
+@deepseek-ai/dsh-llm            0.2.1-rc.2
+@deepseek-ai/dsh-llm-pi-ai      0.2.1-rc.2
+@deepseek-ai/dsh-settings       0.2.1-rc.2
+```
+
+The moment DSH is upgraded (say to `0.2.1-rc.3`) the compatibility gate refuses it during
+composition: **every WorkBuddy model disappears** and the plugins panel says to uninstall and install
+a compatible version. Reinstalling does not help — the newest release on npm, `0.7.9`, carries the
+same exact pins.
+
+It is a **declaration mismatch, not a real incompatibility**: comparing `0.2.1-rc.2` with
+`0.2.1-rc.3` file by file, the six packages differ **only in the version strings inside
+`package.json`; code and type declarations are byte-identical** (see
+[How the measurements were made](#how-the-measurements-were-made)).
+
+DSH ships an official exemption mechanism for exactly this — no code needs patching:
+
+```powershell
+# 1. exempt this exact package@version on this exact runtime
+dsh plugin --profile desktop allow-version "dsh-workbuddy-connect@0.7.8" --dsh-version "$(dsh --version)" --accept-risk
+
+# 2. confirm
+dsh plugin --profile desktop version-exemptions
+
+# 3. fully quit and relaunch DSH
+```
+
+The grant is written to `<profile>/compatibility.json` as `package@version -> allowed runtime
+versions`. It **survives restarts and plugin reinstalls**, but **every DSH upgrade needs a fresh
+grant** — by design, since the approval covers that one exact pair. Revoke it with `revoke-version`.
+
+> The real fix belongs upstream: give `dsh-workbuddy-connect` an
+> `engines.dsh: ">=0.2.1-rc.2 <0.3.0-0"`, or turn those peers into ranges. Until then, each DSH
+> upgrade costs one exemption.
 
 ### Upstream answers 「请求被拦截，请重新发送」 (`400` / `code 11128`)
 

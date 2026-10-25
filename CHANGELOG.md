@@ -6,9 +6,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Changed
+### Documented
 
-- Next release notes go here.
+- **A DSH upgrade hides every WorkBuddy model behind the compatibility gate.** `dsh-workbuddy-connect`
+  pins six `@deepseek-ai/dsh-*` peers to exact versions (`0.2.1-rc.2`), so the next DSH release
+  (`0.2.1-rc.3`) refuses it during composition and the provider disappears. Measured: between
+  `0.2.1-rc.2` and `0.2.1-rc.3` those six packages differ **only in `package.json` version strings** —
+  no code or declaration change — so this is a declaration mismatch, and the newest release on npm
+  (`0.7.9`) carries the same pins. Both READMEs now walk through DSH's own `allow-version`
+  exemption (`dsh plugin --profile <p> allow-version <package@version> --dsh-version <runtime>
+  --accept-risk`), which persists in `<profile>/compatibility.json` across restarts and reinstalls,
+  and note that each further DSH upgrade needs a fresh grant. This is documentation only: the
+  plugin's own behaviour is unchanged, so no version bump.
+
+- Both READMEs gained a short "how the measurements were made" section, listing the re-runnable
+  method behind each measured claim (vary-only-the-system-message probes for the `400`; `npm pack`
+  plus a recursive byte diff for the `rc.2`/`rc.3` comparison).
 
 ## [0.2.5] - 2026-10-22
 
