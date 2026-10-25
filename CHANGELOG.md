@@ -6,6 +6,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Account rows carry the masked phone, and a newly signed-in account adds itself to the library.**
+  Each row is now titled with WorkBuddy's masked phone (`180****0331`) instead of a uid fragment,
+  because a hex string does not say which login a row is, and that ambiguity only grows with the
+  number of accounts. The value arrives masked — the server never returns a full number — and the
+  parser rejects a full-number shape outright, so the plugin can neither store nor render a dialable
+  number; it is captured at import time into `account.nickname` so the list labels a row without
+  re-decrypting anything. Archives captured before this change have no phone on record and fall back
+  to the uid fragment until that account is signed in to the desktop app again (WorkBuddy only
+  exposes the phone of the *current* login), at which point a host sweep backfills that one field —
+  never the tokens, which may have been refreshed here more recently than the app wrote its copy.
+  That same sweep closes a second gap: signing in to a new account in the app used to leave the list
+  stale until "import current account" was clicked, since writing an archive needs the at-rest
+  decryption that only the host can do. The host now checks every 20 s (plus one pass 5 s after
+  startup) and archives a login it has not seen before, so the list catches up on its own within one
+  poll; the manual button stays for when the app cannot be read, the existing "client signed in, not
+  imported yet" banner is the visible hint while that happens, and transient read failures are logged
+  and retried rather than surfaced.
+
 ### Documented
 
 - **A DSH upgrade hides every WorkBuddy model behind the compatibility gate.** `dsh-workbuddy-connect`

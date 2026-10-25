@@ -27,9 +27,11 @@ This plugin does five things:
 ### Archive and switching
 
 - Archive directory: `~/.dsh/workbuddy-accounts/`, one JSON per account
-- "Import current account" stores whichever account the WorkBuddy app is signed in to
+- Account rows are titled with the account's **masked phone** (e.g. `180****0331`) instead of a uid fragment — with several logins on one machine, only the phone tells you which one you are looking at
+- WorkBuddy's server **only ever hands out the masked form**, and this plugin only stores and renders that form: the parser rejects a full-number shape outright, so this plugin cannot display a dialable number
+- Whichever account the desktop app is signed in to **adds itself to the list and gets archived** — no "Import current account" click needed; that button remains for when the plugin cannot read the app (see [Add an account](#add-an-account))
 - Duplicate copies of the same account are collapsed to the canonical file
-- The panel polls every 10 seconds, so a freshly signed-in account appears by itself
+- The panel polls every 10 seconds
 
 ### Moving accounts between machines
 
@@ -175,15 +177,17 @@ Both read the same data:
 | **Plugin settings page** | full list, account details, cooldown state, check-in state, auto-rotate and check-in switches |
 | **Bottom-right floating button** | quick switch popover |
 
-**Plugin settings page** (sidebar → Plugins → `dsh-workbuddy-switcher`): every account shows its region, cooldown countdown, check-in badge and refresh-token expiry, with a small "clear" button directly behind each cooldown countdown, and the two switches at the bottom.
+**Plugin settings page** (sidebar → Plugins → `dsh-workbuddy-switcher`): every account is titled with its **masked phone** (e.g. `180****0331`), followed by its region, check-in badge and cooldown badges, with a small "clear" button directly behind each cooldown countdown; the row below carries the full uid and the refresh-token expiry, and the two switches sit at the bottom.
+
+Rows used to be titled with a uid fragment (`8bc5fd09…b058`), but a hex string does not answer "which login is this?" — with several accounts on one machine, the phone is the thing you recognise. It comes from the WorkBuddy desktop app's identity file, and **upstream only ever sends the masked form**, so that is all this plugin stores and renders: a full-number shape is rejected by the parser, which means a dialable number can neither be stored nor shown here.
 
 ![Plugin settings page](docs/plugin-page.png)
 
-**Floating button** (bottom-right by default): switch without leaving the conversation; the popover carries the same cooldown state and import action, and each cooldown badge is followed by its own small "clear" button. Drag it with a mouse or touch; its position is saved in the current browser and kept within the viewport on resize. Clicking or pressing Enter / Space still toggles the popover.
+**Floating button** (bottom-right by default): switch without leaving the conversation; the launcher's own label is the selected account's masked phone. The popover carries the same cooldown state and import action, and each cooldown badge is followed by its own small "clear" button. Drag it with a mouse or touch; its position is saved in the current browser and kept within the viewport on resize. Clicking or pressing Enter / Space still toggles the popover.
 
 ![Bottom-right floating button](docs/quick-switch.png)
 
-In both shots `4dba68a4` is cooling ("冷却至 10/19 09:56") — the state left behind after the plugin rotated away from it when its quota ran out — while `128a8f9c` is the account in use.
+In both shots `4dba68a4` is cooling ("冷却至 10/19 09:56") — the state left behind after the plugin rotated away from it when its quota ran out — while `128a8f9c` is the account in use. Those screenshots predate the phone labels, which is why the titles are still uid fragments; on the current version the same row reads `180****0331`.
 
 **Daily check-in**: the header shows `check-in 4/4` for the current day, and every row carries its own state badge — `already +100 today · streak 12` means today's credits are in.
 
@@ -253,15 +257,19 @@ Host-side pieces (the `agent/request-error` listener and the reclaim timer) regi
 
 ### Add an account
 
-1. Sign in to the target account in the WorkBuddy desktop app
-2. In DSH: sidebar → Plugins → `dsh-workbuddy-switcher`
-3. Click "Import current account"
+Sign in to the target account in the WorkBuddy desktop app — that is the whole procedure. The host sweeps the app's identity file every 20 seconds (with one pass 5 seconds after startup); a login that is not in the archive yet is imported and persisted automatically, and the panel polls every 10 seconds, so it shows up within half a minute at the latest.
 
-A `<uid>.json` appears in the archive directory.
+Accounts are **named after the masked phone** (e.g. `180****0331`). The number is recorded into the archive as `account.nickname` at import time, so the list can label the row later without decrypting anything. It is WorkBuddy's own masked form — the server never returns a full number — and the parser only accepts that shape; a full number is rejected, so it can neither be stored nor rendered.
+
+Archives captured **before** this change recorded no phone, so those rows fall back to the uid fragment (`8bc5fd09…b058`) for now. There is no migration script and none is needed: WorkBuddy only exposes the phone of the **currently signed-in** account, so the label fills in the next time that account is signed in to the app and the sweep sees it. That backfill writes `account.nickname` only — **tokens are never touched**, since this plugin may have refreshed them more recently than the desktop app wrote its copy.
+
+**"Import current account" still exists**, for when the plugin cannot read the app: WorkBuddy is not installed, the identity file is unreadable, or you want the account imported now instead of waiting for the next sweep.
+
+Either way, a `<uid>.json` appears in the archive directory.
 
 ### Switch accounts
 
-Click "Switch to this account" in the card, or use the floating button. It takes effect within ~30 seconds (the credential poll interval).
+Click "Switch to this account" in the card, or use the floating button (whose label is the selected account's masked phone). It takes effect within ~30 seconds (the credential poll interval).
 
 ### Auto-rotate
 
@@ -335,11 +343,13 @@ Archives must use the **desktop shape** (`{auth, account}`), not the plugin's ow
     "domain": "www.workbuddy.cn",
     "refreshExpiresAt": 1794901570
   },
-  "account": { "uid": "697af213-..." }
+  "account": { "uid": "697af213-...", "nickname": "180****0331" }
 }
 ```
 
 **Why**: a file named by `authFile` is parsed by `parseWorkBuddyAuth`, which only understands the desktop shape. Writing the own-copy shape makes the plugin read `undefined` and hide the entire model group — a silent failure with no error.
+
+`account.nickname` is the one non-credential field here: the masked phone written at import time (and by the later backfill), used as the row title. Only the masked shape is ever written — a full number fails the check — so this field cannot hold a dialable number.
 
 ### The rotation hook
 
@@ -512,6 +522,22 @@ Archives hold **plaintext accessToken / refreshToken**.
 ### The model group disappeared
 
 Almost certainly a wrong archive shape. The top-level keys must be `auth` / `account`; `version` / `credential` means an old file, which is migrated automatically on the next DSH start.
+
+### An account row shows a uid instead of a phone
+
+That is an archive captured before the phone label landed: it was written before the phone was recorded, and the plugin has nothing else to fall back to, so it shows the uid fragment (`8bc5fd09…b058`).
+
+Nothing needs editing by hand, and there is no migration script: WorkBuddy only exposes the phone of the **currently signed-in** account, so signing that account in to the desktop app again lets the next sweep (≤20 s) record the phone into `account.nickname`, and the row title becomes `180****0331`. The backfill writes that one field only — **it never overwrites the tokens**, because the credential this plugin refreshed is newer than the copy the desktop app still holds.
+
+### Signed in to a new account, but the list did not change
+
+Normally it appears by itself: the host sweeps every 20 seconds, imports and archives the login within half a minute, and shows "the client is signed in to a new account, not imported yet" as the visible hint along the way.
+
+If it never shows up:
+
+1. wait for one sweep (≤20 s) and look again — the panel refreshes every 10 seconds, so the new row normally arrives on its own
+2. if it is still missing, the plugin cannot read the app: WorkBuddy is not installed, its identity file is unreadable, or the machine has no usable decryption path. Click "Import current account" to import it by hand
+3. read failures during a sweep are logged and retried, never surfaced: the identity file is briefly unreadable while WorkBuddy rotates its own token, which is not something you need to fix
 
 ### After a DSH upgrade: "incompatible with the running DSH"
 
