@@ -10,6 +10,52 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Next release notes go here.
 
+## [0.3.3] - 2026-10-28
+
+### Fixed
+
+- **`400` / `11128` 请求被拦截 came back when the fetch guard was not the outermost
+  `globalThis.fetch`.** The 0.3.0 guard wraps `globalThis.fetch` at activation and
+  marks instruction text there. Anything that replaces `globalThis.fetch`
+  afterwards — another plugin importing `undici`, whose `install()` assigns the
+  global, or a host that swaps it in — silently disables the guard, and the
+  gateway then sees the unmarked prompt again.
+
+  Reproduced on the live gateway with the body a failing session actually sent
+  (33 KB system prompt, 52 tool declarations, 63 messages):
+
+  | body sent | result |
+  |---|---|
+  | as the host wrote it | `400` `11128` `Illegal API invocation from an unapproved channel` |
+  | same body, instruction text marked (0.3.0 behaviour) | `200` |
+
+  So the content was already correct; the rewrite was not happening. The fix adds
+  a second, non-global interception point: `installUpstreamRetry` wraps
+  `WorkBuddyUpstreamClient.prototype.chatStream`, the one method every chat body
+  must pass through, and on a measured `400` + `11128` retries the same request
+  once with `neutralizeChatBodyEverywhere`: every model-visible string is marked
+  (message content of any role, `reasoning_content`, tool descriptions) while
+  roles, ids, tool names, tool-call `arguments` and the model name stay
+  byte-identical, so the wire format still parses.
+
+  The first attempt is the caller's body untouched, so a healthy request never
+  pays for this and is never rewritten twice; a different 400 (for example
+  `11148`, the tool-pairing complaint) is surfaced immediately without a retry.
+
+  Measured end to end with the fetch guard deliberately not installed: first
+  attempt `400` / `11128`, retried body `200` with the answer intact. With the
+  fetch guard installed the healthy path still issues exactly one request and the
+  body reaches the client byte-identical.
+
+### Tests
+
+- `test/channel-retry.test.js` pins the new behaviour: only `400` + the channel
+  markers count as a rejection, the escalated body keeps its identifiers and tool
+  arguments intact while every text field gains marks, the measured phrase no
+  longer survives anywhere, a healthy chat is sent once and byte-identically, a
+  different 400 is not retried, and a second install neither stacks wrappers nor
+  unwraps a live one.
+
 ## [0.3.2] - 2026-10-28
 
 ### Changed
