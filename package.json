@@ -1,24 +1,32 @@
 {
   "name": "dsh-workbuddy-switcher",
   "displayName": "DSH WorkBuddy Switcher",
-  "description": "Manage a local pool of WorkBuddy accounts and switch between them inside DeepSeek Harness — with automatic rotation when an account runs out of quota.",
-  "version": "0.2.6",
+  "description": "Bring WorkBuddy desktop app models into DeepSeek Harness with one install — manage a local pool of accounts, switch between them, and rotate automatically when an account runs out of quota.",
+  "version": "0.3.0",
   "author": "guoding",
+  "contributors": [
+    "corrinehu (dsh-workbuddy-connect, vendored under lib/bridge)"
+  ],
   "keywords": [
     "dsh-plugin",
     "deepseek-harness",
     "deepseek",
     "workbuddy",
     "account-switcher",
-    "multi-account"
+    "multi-account",
+    "model-provider"
   ],
   "type": "module",
   "main": "lib/index.js",
   "exports": {
     ".": "./lib/index.js",
-    "./client": "./lib/client.js",
+    "./client": "./lib/client.bundle.js",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build:client": "node scripts/build-client.mjs",
+    "test": "node --test"
   },
   "files": [
     "lib",
@@ -26,21 +34,54 @@
     "README.md",
     "README.en.md",
     "LICENSE",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "THIRD_PARTY_NOTICES.txt"
   ],
   "license": "MIT",
   "engines": {
-    "node": "^22.19.0 || >=24.0.0"
+    "node": "^22.19.0 || >=24.0.0",
+    "dsh": ">=0.2.1-rc.2 <0.3.0-0"
+  },
+  "dependencies": {
+    "@earendil-works/pi-ai": "1.3.0"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.5",
-    "dsh-workbuddy-connect": ">=0.7.8"
+    "@deepseek-ai/dsh-attachment": ">=0.2.1-rc.2 <0.3.0-0",
+    "@deepseek-ai/dsh-home-paths": ">=0.2.1-rc.2 <0.3.0-0",
+    "@deepseek-ai/dsh-host-webserver": ">=0.2.1-rc.2 <0.3.0-0",
+    "@deepseek-ai/dsh-llm": ">=0.2.1-rc.2 <0.3.0-0",
+    "@deepseek-ai/dsh-llm-pi-ai": ">=0.2.1-rc.2 <0.3.0-0",
+    "@deepseek-ai/dsh-settings": ">=0.2.1-rc.2 <0.3.0-0",
+    "@deepseek-ai/schemastery": "^3.18.5",
+    "react": "^18.2.0"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/cordis": {
       "optional": true
     },
-    "dsh-workbuddy-connect": {
+    "@deepseek-ai/dsh-attachment": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-home-paths": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-host-webserver": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-llm": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-llm-pi-ai": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-settings": {
+      "optional": true
+    },
+    "@deepseek-ai/schemastery": {
+      "optional": true
+    },
+    "react": {
       "optional": true
     }
   },
@@ -49,6 +90,14 @@
       "patch": "./cordis.patch.yml"
     },
     "client": {
+      "inject": [
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-model-selection",
+        "@deepseek-ai/dsh-client-locale"
+      ],
       "platform": "web"
     }
   }

@@ -5,6 +5,7 @@ import { installChannelGuard, neutralizeChatBody } from '../lib/channel-guard.js
 
 const RAW = 'DeepSeek Harness';
 const NEUTRAL = 'DeepSeek\u200b Harness';
+const MARK = '\u200b';
 
 const body = (messages) => JSON.stringify({
   model: 'deepseek-v4.1-flash',
@@ -15,26 +16,50 @@ const body = (messages) => JSON.stringify({
 
 const countOf = (hay, needle) => hay.split(needle).length - 1;
 
-test('neutralises every instruction occurrence, not just the first', () => {
-  const source = body([
-    { role: 'system', content: `You are an AI agent powered by ${RAW}.\n\nThe runtime context names the ${RAW} implementation checkout.` },
-    { role: 'user', content: 'hi' },
-  ]);
+const instructionsOf = (bodyString) => JSON.parse(bodyString).messages
+  .filter((message) => message.role === 'system' || message.role === 'developer')
+  .map((message) => (typeof message.content === 'string' ? message.content : message.content.map((part) => part.text).join('')))
+  .join('\n');
+
+test('neutralises every occurrence of the measured phrase', () => {
+  const source = body([{
+    role: 'system',
+    content: `You are an AI agent powered by ${RAW}. The ${RAW} implementation checkout is here.`,
+  }]);
   const next = neutralizeChatBody(source);
   assert.equal(typeof next, 'string');
   assert.equal(countOf(next, RAW), 0);
-  assert.equal(countOf(next, NEUTRAL), 2);
-  // Nothing else about the document changes.
-  assert.deepEqual(JSON.parse(next).messages[1], { role: 'user', content: 'hi' });
-  assert.equal(JSON.parse(next).model, 'deepseek-v4.1-flash');
+  // Both mentions survive in a readable form; only the exact spelling is broken.
+  assert.equal(countOf(next, 'DeepSeek'), 2);
+  assert.equal(countOf(next, 'Harness'), 2);
+  assert.ok(countOf(next, MARK) >= 2);
 });
 
-test('leaves user text alone', () => {
+test('breaks long exact runs so a longer blacklist entry cannot match', () => {
+  const paragraph = 'Tokens prefixed with @ are paths the user explicitly referenced. '
+    + 'Relative paths resolve from the workspace root; absolute paths identify files or directories on the host. '
+    + 'A trailing slash marks a directory: list it when its contents matter.';
+  const next = instructionsOf(neutralizeChatBody(body([{ role: 'system', content: paragraph }])));
+  const longest = Math.max(...next.split(MARK).map((piece) => piece.length));
+  // The cadence is 24 characters, so no unmarked run can approach the
+  // ~110-character fingerprint that was measured on 2026-10-28.
+  assert.ok(longest < 60, `unmarked run of ${longest} characters is too long`);
+});
+
+test('never splits a word: removing the marks restores the text', () => {
+  const text = 'Alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma.';
+  const marked = instructionsOf(neutralizeChatBody(body([{ role: 'system', content: text }])));
+  assert.notEqual(marked, text);
+  assert.equal(marked.split(MARK).join(''), text);
+});
+
+test('leaves user text untouched', () => {
   const source = body([
     { role: 'system', content: 'plain instructions' },
-    { role: 'user', content: `the ${RAW} implementation checkout` },
+    { role: 'user', content: `the ${RAW} implementation checkout, at the workspace root` },
   ]);
-  assert.equal(neutralizeChatBody(source), undefined);
+  const next = neutralizeChatBody(source);
+  assert.equal(JSON.parse(next ?? source).messages[1].content, `the ${RAW} implementation checkout, at the workspace root`);
 });
 
 test('handles a developer role and text-part content', () => {
@@ -50,10 +75,11 @@ test('handles a developer role and text-part content', () => {
   assert.equal(JSON.parse(next).messages[0].content[1].text, 'unrelated');
 });
 
-test('is a no-op for bodies that need nothing', () => {
-  assert.equal(neutralizeChatBody(body([{ role: 'system', content: 'already clean' }])), undefined);
+test('is a no-op for bodies that cannot need it', () => {
+  assert.equal(neutralizeChatBody(body([{ role: 'user', content: 'hi there friend' }])), undefined);
   assert.equal(neutralizeChatBody('not json'), undefined);
   assert.equal(neutralizeChatBody(JSON.stringify({ messages: 'nope' })), undefined);
+  assert.equal(neutralizeChatBody(''), undefined);
   assert.equal(neutralizeChatBody(undefined), undefined);
 });
 
@@ -74,7 +100,6 @@ test('the installed guard rewrites a chat POST and restores afterwards', async (
     });
     assert.equal(calls.length, 1);
     assert.equal(countOf(calls[0].init.body, RAW), 0);
-    assert.equal(countOf(calls[0].init.body, NEUTRAL), 1);
     assert.equal(calls[0].init.headers['Content-Type'], 'application/json');
     assert.equal(calls[0].init.headers['Content-Length'], undefined);
     restore();
@@ -104,26 +129,6 @@ test('the installed guard leaves other traffic untouched', async () => {
     assert.equal(calls[2].init.body, undefined);
     restore();
     assert.equal(globalThis.fetch, stub);
-  } finally {
-    globalThis.fetch = original;
-  }
-});
-
-test('a clean chat body reaches the upstream byte-identical', async () => {
-  const original = globalThis.fetch;
-  const calls = [];
-  const stub = async (input, init) => {
-    calls.push({ input, init });
-    return { status: 200 };
-  };
-  globalThis.fetch = stub;
-  try {
-    const restore = installChannelGuard();
-    // `body` is a string, so the guard inspects it and finds nothing to do.
-    const clean = body([{ role: 'user', content: 'hi' }]);
-    await globalThis.fetch('https://copilot.tencent.com/v2/chat/completions', { method: 'POST', body: clean });
-    assert.equal(calls[0].init.body, clean);
-    restore();
   } finally {
     globalThis.fetch = original;
   }

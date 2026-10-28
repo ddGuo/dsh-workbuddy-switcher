@@ -202,51 +202,62 @@ WorkBuddy 对**单个模型被限流**和**账号积分用尽**返回的是同�
 
 ### 一句话安装（推荐）
 
-把下面这句交给本机已有的 Agent（这个 DSH 会话就够用）：没装就装，装了但不是最新版就更新，它依赖的 `dsh-workbuddy-connect` 同样处理。
+把下面这句交给本机已有的 Agent（这个 DSH 会话就够用）：没装就装，装了但不是最新版就更新。
 
 ```text
-安装 dsh-workbuddy-switcher 插件（https://github.com/ddGuo/dsh-workbuddy-switcher）：本机没有就装，已有但不是最新版就更新；它依赖的插件 dsh-workbuddy-connect（https://github.com/corrinehu/dsh-workbuddy-connect）同样处理。装完提醒我完全退出并重开 DSH。
+安装 dsh-workbuddy-switcher 插件（https://github.com/ddGuo/dsh-workbuddy-switcher），本机没有就装，已有但不是最新版就更新；如果装过 dsh-workbuddy-connect，先把它卸掉。装完提醒我完全退出并重开 DSH。
 ```
 
-自己跑也行，等价的一条命令（**重复执行即更新**，固定在当前发布的版本）：
+自己跑也行，等价的两条命令（**重复执行即更新**，固定在当前发布的版本）：
 
 ```powershell
-dsh plugin --profile desktop add "dsh-workbuddy-connect@^0.7.8" "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git#v0.2.6" --config.strict-dep-builds=false
+# 0.3.0 起，WorkBuddy 模型提供者已经并进本插件；旧的独立插件必须卸掉，否则两个 provider 会打架
+dsh plugin --profile desktop remove dsh-workbuddy-connect
+dsh plugin --profile desktop add "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git#v0.3.0" --config.strict-dep-builds=false
 ```
 
 想跟随主干（每次 `add` 都拉最新提交）：
 
 ```powershell
-dsh plugin --profile desktop add "dsh-workbuddy-connect@^0.7.8" "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git" --config.strict-dep-builds=false
+dsh plugin --profile desktop add "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git" --config.strict-dep-builds=false
 ```
 
-> - 上面的 `#v0.2.6` 是**固定的发布标签**，不会随时间漂移；去掉它就变成跟随 `main` 的最新提交。生产环境建议用标签，本地开发用 `main`。
-> - 写 `^0.7.8` 而不是 `@latest`：`latest` 标签在镜像上可能仍指向旧版（实测解析到 0.7.7，被内核的版本兼容检查拒掉）。
-> - 已经是 `file:` 安装的，这条会顺手换成 git 来源（实测输出里会出现 `- dsh-workbuddy-switcher` / `+ dsh-workbuddy-switcher <新版本>` 这一对）；想继续用本地源码，改用下面「从本地源码装」那条。
+> - 上面的 `#v0.3.0` 是**固定的发布标签**，不会随时间漂移；去掉它就变成跟随 `main` 的最新提交。生产环境建议用标签，本地开发用 `main`。
+> - 已经是 `file:` 安装的，这条会顺手换成 git 来源（输出里会出现 `- dsh-workbuddy-switcher` / `+ dsh-workbuddy-switcher <新版本>` 这一对）；想继续用本地源码，改用下面「从本地源码装」那条。
 > - 对**同一个** `file:` 路径重复 `add`，pnpm 只会回 `Already up to date`，改过的源码不会同步过去。
 
-### 需要单独安装 dsh-workbuddy-connect
+### 从 0.2.x 升级：必须卸掉 dsh-workbuddy-connect
 
-本插件**不会自动带上** `dsh-workbuddy-connect`。后者声明为 `peerDependency`，而 DSH profile 使用 `autoInstallPeers: false`，所以装本插件时只会安装它自己（实测 `Packages: +1`）。
+0.3.0 把 `dsh-workbuddy-connect@0.7.8` 整个并进了本插件（`lib/bridge/`，字节未改，MIT，见 `THIRD_PARTY_NOTICES.txt`）。两个包都装着会注册两个 `workbuddy` provider，模型列表会重复甚至打架，所以升级时先 `remove` 掉旧插件。
 
-如果改成硬依赖，安装会连带拉进 **87 个包**——而且可能出现两份 `dsh-workbuddy-connect` 实例：一份在 profile 顶层、一份在插件的 `node_modules` 里。两个实例读到的是不同的 `process.env`，切换就会失效。所以这个「不自动安装」是有意的，这也是上面那条命令要把两个包一起写上的原因。
+顺带解决了两件事：
 
-从本地源码装（改代码时用）：
+1. **不用再装两个插件。** 一个包装完就有模型提供者 + 账号切换。
+2. **不再被 DSH 的版本兼容闸门拦下。** 旧插件把 6 个 `@deepseek-ai/dsh-*` peer 精确锁死在 `0.2.1-rc.2`，DSH 一升级它就被拒（详见「排障 → DSH 升级后提示不兼容」）。本插件的 peer 写成 `>=0.2.1-rc.2 <0.3.0-0` 的范围，并声明 `engines.dsh`，所以同一条兼容闸门对未来 rc 版本直接放行，之前给旧插件加的 `allow-version` 豁免可以删掉：
+
+```powershell
+dsh plugin --profile desktop revoke-version "dsh-workbuddy-connect@0.7.8" --dsh-version 0.2.1-rc.3
+```
+
+### 从本地源码装（改代码时用）
 
 ```powershell
 dsh plugin --profile desktop add "file:E:\dsh\dsh-workbuddy-switcher"
 ```
 
-> **注意**：`file:` 安装是**复制**不是软链接，而且重复 `add` 会被 pnpm 判为 `Already up to date`。改完源码要么 `remove` + `add`，要么直接同步：
+> **注意**：`file:` 安装是**复制**不是软链接，而且重复 `add` 会被 pnpm 判为 `Already up-to-date`。改完源码要么 `remove` + `add`，要么直接同步：
 >
 > ```powershell
-> Copy-Item "E:\dsh\dsh-workbuddy-switcher\lib\*" `
->   "$env:USERPROFILE\.dsh\profiles\desktop\node_modules\dsh-workbuddy-switcher\lib\" -Force
+> Copy-Item "E:\dsh\dsh-workbuddy-switcher\lib" `
+>   "$env:USERPROFILE\.dsh\profiles\desktop\node_modules\dsh-workbuddy-switcher\" -Recurse -Force
 > ```
+>
+> 改过 `lib/client.js` 或 `lib/bridge/client.js` 之后，先跑 `npm run build:client` 重新生成 `lib/client.bundle.js`——DSH 只会加载打包好的那一份。
 
 ### 重启
 
-Host 侧组件（`agent/request-error` 监听器、回收定时器）**只在启动时注册**，安装后必须**完全退出 DSH 再打开**。
+Host 侧组件（`agent/request-error` 监听器、回收定时器、`fetch` 兜底）**只在启动时注册**，安装后必须**完全退出 DSH 再打开**。
+
 
 ## 使用
 
@@ -357,21 +368,28 @@ continue;  // 重试
 
 ### 渠道校验兜底
 
-WorkBuddy 网关会对系统提示词做**渠道指纹校验**：只要 `system` 消息里出现写实的
-`DeepSeek Harness`，就返回 `400` / `code 11128` / `msg: Illegal API invocation from an
-unapproved channel`，也就是界面上那句「请求被拦截，请重新发送」。官方客户端从不发这句话，
-所以同一个账号在 App 里是好的。
+WorkBuddy 网关会对系统提示词做**渠道指纹校验**：命中就返回 `400` / `code 11128` /
+`msg: Illegal API invocation from an unapproved channel`，界面上显示为「请求被拦截，请重新发送」。
+官方客户端从不发这些文本，所以同一个账号在 App 里是好的。
 
-插件在传输层兜住它：包裹 `globalThis.fetch`，只对 URL 含 `/v2/chat/completions` 的 `POST`
-检查请求体，把 `system` / `developer` 消息里的**每一处** `DeepSeek Harness` 换成中间夹一个
-零宽空格的 `DeepSeek\u200b Harness`（U+200B）。字节匹配因此失效，人和模型读到的意思不变。
+这条规则**换过两次**，所以兜底做法也换过一次：
 
-为什么不能只靠 `dsh-workbuddy-connect`：它自己也做同样的改写，但只替换**第一处**
-（`String.prototype.replace` 配字符串参数的含义），而 DSH 的系统提示词现在会在三个地方
-提到这个名字——开头那句中一处，运行时上下文里两处。剩下没被改到的两处足以让校验重新命中。
+| 日期 | 实测的触发条件 | 当时的解法 |
+|---|---|---|
+| 2026-10-22 | `system` 里出现写实的 `DeepSeek Harness`，一处就够 | 把每一处换成 `DeepSeek\u200b Harness` |
+| 2026-10-28 | 上面那招失效；触发变成了系统提示词里**另一段更长的精确子串**（~110 字符，跨句子） | 见下 |
 
-作用域是刻意收窄的：只动 `system` / `developer` 的文本，不碰用户消息，也不碰其它供应商的
-请求；已经不含该字样的请求体按字节原样转发。
+2026-10-28 的判据：那段文本里**任何改动一个字符**都会变回 `200`，而在前面或后面追加整句
+都不影响它继续 `400`——这是**精确匹配黑名单**的特征，不是某个词的规则。所以继续找「是哪个词」
+没有意义：下一次它会换一段。
+
+现在的做法是**不让任何长串活下来**：包裹 `globalThis.fetch`，只对 URL 含 `/v2/chat/completions`
+的 `POST` 检查请求体，在 `system` / `developer` 文本里按**每约 24 个字符**的节奏、只在**词与词之间**
+插入一个零宽空格（U+200B）。这样任何超过 ~30 字符的精确匹配都必然被打断，而人和模型读到的
+内容一字不变（零宽空格不可见、不改变断词）。
+
+插入点只在词边界，所以标识符、路径、代码片段不会被拆开；只动指令文本，不碰用户消息、不碰工具
+声明、不碰其它供应商的请求；已经处理过、或本来没有指令文本的请求体按字节原样转发。
 
 ### 验证方式
 
@@ -379,8 +397,10 @@ unapproved channel`，也就是界面上那句「请求被拦截，请重新发�
 
 | 结论 | 怎么得到的 |
 |---|---|
-| 400 是系统提示词里的字样触发的 | 只改 `system` 内容、其余字节不变，逐个变体发最小请求对比状态码 |
+| 400 是系统提示词里的内容触发的 | 只改 `system` 内容、其余字节不变，逐个变体发最小请求对比状态码 |
 | 只改第一处不够 | 同一份真实 8 KB 提示词，分别只改第一处 / 改全部，前者 `400`、后者 `200` |
+| 2026-10-28 的触发是精确子串 | 二分到 111 字符边界；边界内改任意一个字符→`200`，前后追加整句→仍 `400`；连发 5 次结果稳定 |
+| 逐 ~24 字符插零宽空格能过 | 同一份真实提示词 + 108 个工具，不加兜底 `400`、加了 `200`；模型仍能正确回答 |
 | `rc.2` 与 `rc.3` 只差版本号 | `npm pack` 拉两个版本，解包后递归逐文件比对字节；六个包合计仅 `package.json` 有差异 |
 
 最后一条的具体做法：把两个版本的包都解到本地目录，遍历所有文件（跳过 `node_modules`）比较内容，
@@ -517,46 +537,43 @@ Date.UTC(y, m - 1, d, h, min, s) - 8 * 3600 * 1000
 
 ### DSH 升级后提示「与当前 DSH 不兼容」
 
-`dsh-workbuddy-connect` 把 6 个 DSH 运行包**精确锁死**在它发版时的版本：
+**0.3.0 起不会再有这个问题**：模型提供者已并进本插件，而且 peer 与 `engines.dsh` 都写成了范围
+（`>=0.2.1-rc.2 <0.3.0-0`），同一条兼容闸门对未来 rc 版本直接放行。
 
-```
-@deepseek-ai/dsh-attachment     0.2.1-rc.2
-@deepseek-ai/dsh-home-paths     0.2.1-rc.2
-@deepseek-ai/dsh-host-webserver 0.2.1-rc.2
-@deepseek-ai/dsh-llm            0.2.1-rc.2
-@deepseek-ai/dsh-llm-pi-ai      0.2.1-rc.2
-@deepseek-ai/dsh-settings       0.2.1-rc.2
-```
+如果你还在 0.2.x（装的是独立的 `dsh-workbuddy-connect`），那就是旧插件的锅：它把 6 个 DSH 运行包
+**精确锁死**在 `0.2.1-rc.2`，DSH 一升级就被拦在组合阶段，**WorkBuddy 模型整体消失**。npm 上最新的
+`0.7.9` 也是同样的精确锁，所以「重装」解决不了。这是**声明问题，不是真的不兼容**：逐包对比
+`0.2.1-rc.2` 与 `0.2.1-rc.3`，六个包**只有 `package.json` 里的版本号不同，代码与类型声明逐字节一致**
+（见 [验证方式](#验证方式)）。
 
-DSH 一升级（比如到 `0.2.1-rc.3`），兼容性检查就会把这个插件拦在组合阶段，**WorkBuddy 模型整体消失**，插件页给出「请卸载后重新安装与当前 DSH 兼容的版本」。npm 上最新的 `0.7.9` 也是同样的精确锁，所以「重装」并不能解决。
-
-这是**声明问题，不是真的不兼容**：逐包对比 `0.2.1-rc.2` 与 `0.2.1-rc.3`，六个包**只有 `package.json` 里的版本号不同，代码与类型声明逐字节一致**（见 [验证方式](#验证方式)）。
-
-DSH 为此提供了官方豁免机制，不需要改任何人的代码：
+两条出路，推荐第一条：
 
 ```powershell
-# 1. 授权：把「包名@精确版本」放到「允许的运行版本」白名单里
+# 1（推荐）：升级到 0.3.0，provider 已内置且声明为范围
+dsh plugin --profile desktop remove dsh-workbuddy-connect
+dsh plugin --profile desktop add "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git#v0.3.0"
+
+# 2（临时）：继续用旧插件，用 DSH 官方的精确版本豁免放行
 dsh plugin --profile desktop allow-version "dsh-workbuddy-connect@0.7.8" --dsh-version "$(dsh --version)" --accept-risk
-
-# 2. 确认
-dsh plugin --profile desktop version-exemptions
-
-# 3. 完全退出 DSH 再打开
+dsh plugin --profile desktop version-exemptions   # 确认
 ```
 
-授权写进 `<profile>/compatibility.json`，键是 `包名@版本 → 允许的运行版本列表`，**重启依然有效，重装插件也不丢**；但**DSH 每升级一次都要重新授权**（官方设计如此：只豁免那一对精确版本）。撤销用 `revoke-version`。
-
-> 根因修复应该在上游：给 `dsh-workbuddy-connect` 加上 `engines.dsh: ">=0.2.1-rc.2 <0.3.0-0"`，或者把 peer 改成范围。它一天不改，DSH 每升一次就要豁免一次。
+豁免写进 `<profile>/compatibility.json`（`包名@版本 → 允许的运行版本`），重启不丢、重装插件不丢，
+但 **DSH 每升级一次都要重新授权**；撤销用 `revoke-version`。走第一条升级路线后，这条豁免就没用了，
+可以顺手删掉。
 
 ### 上游报「请求被拦截，请重新发送」（`400` / `code 11128`）
 
-这是网关的渠道校验，**与账号无关**，换号不会好。插件 v0.2.5 起在传输层兜住了它（见
+这是网关的渠道指纹校验，**与账号无关**，换号不会好。插件在传输层兜住了它（见
 [渠道校验兜底](#渠道校验兜底)），需要**完全退出 DSH 再打开**才生效——`fetch` 包裹只在启动时安装。
 
-重启后仍报同样的错，按这个顺序查：
+这条规则会变（2026-10-22 和 10-28 就完全不是同一个触发条件），所以兜底不针对某个词，而是打断
+所有长精确匹配。重启后仍报同样的错，按这个顺序查：
 
-1. 设置页里确认插件版本是 `0.2.5` 或更高
+1. 设置页里确认插件版本是 `0.3.0` 或更高（0.2.5–0.2.6 只挡得住 10-22 那版规则）
 2. 确认只装了一份：profile 顶层 `node_modules/dsh-workbuddy-switcher` 里应有 `lib/channel-guard.js`
+3. 如果确实又变了规则，把报错和当时的系统提示词一起提 issue——判定方法见
+   [验证方式](#验证方式)，用同样的二分法能定位到新的触发串
 
 ### 自动轮换没生效
 

@@ -207,36 +207,51 @@ check-in do not interfere**.
 
 ### One-line install (recommended)
 
-Hand the line below to the Agent already running on this machine (this DSH session is enough): it installs both plugins if missing, updates them if they are not current, and treats the dependency `dsh-workbuddy-connect` the same way.
+Hand the line below to the Agent already running on this machine (this DSH session is enough): it installs the plugin if missing and updates it when it is not current.
 
 ```text
-Install the dsh-workbuddy-switcher plugin (https://github.com/ddGuo/dsh-workbuddy-switcher): install it if missing, update it if it is not the latest, and do the same for the plugin it depends on, dsh-workbuddy-connect (https://github.com/corrinehu/dsh-workbuddy-connect). When done, remind me to fully quit and relaunch DSH.
+Install the dsh-workbuddy-switcher plugin (https://github.com/ddGuo/dsh-workbuddy-switcher): install it if missing, update it if it is not the latest, and remove dsh-workbuddy-connect first if it is still installed. When done, remind me to fully quit and relaunch DSH.
 ```
 
-Or run the equivalent command yourself — **re-running it is the update**, pinned to the current release:
+Or run the equivalent commands yourself — **re-running them is the update**, pinned to the current release:
 
 ```powershell
-dsh plugin --profile desktop add "dsh-workbuddy-connect@^0.7.8" "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git#v0.2.6" --config.strict-dep-builds=false
+# from 0.3.0 the WorkBuddy model provider ships inside this plugin, so the old standalone
+# plugin must go — two copies would register two `workbuddy` providers
+dsh plugin --profile desktop remove dsh-workbuddy-connect
+dsh plugin --profile desktop add "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git#v0.3.0" --config.strict-dep-builds=false
 ```
 
 To follow the trunk instead (every `add` pulls the newest commit):
 
 ```powershell
-dsh plugin --profile desktop add "dsh-workbuddy-connect@^0.7.8" "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git" --config.strict-dep-builds=false
+dsh plugin --profile desktop add "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git" --config.strict-dep-builds=false
 ```
 
-> - The `#v0.2.6` above is a **fixed release tag** and never drifts; drop it to follow the newest commit on `main`. Use tags for a settled install, `main` while developing.
-> - `^0.7.8` rather than `@latest`: on mirrors the `latest` tag can still point at an old build (it resolved to 0.7.7 here and was rejected by the runtime's compatibility check).
+> - The `#v0.3.0` above is a **fixed release tag** and never drifts; drop it to follow the newest commit on `main`. Use tags for a settled install, `main` while developing.
 > - If this plugin is already installed from a `file:` path, this command switches it to the git source (the output shows a `- dsh-workbuddy-switcher` / `+ dsh-workbuddy-switcher <new version>` pair); to stay on your local checkout, use the local-source command below instead.
 > - Re-`add`ing the **same** `file:` path only prints `Already up to date` — edited sources are not copied over.
 
-### dsh-workbuddy-connect must be installed separately
+### Upgrading from 0.2.x: remove dsh-workbuddy-connect
 
-This plugin does **not** pull `dsh-workbuddy-connect` in. That package is a `peerDependency`, and DSH profiles set `autoInstallPeers: false`, so installing this plugin installs only itself (measured: `Packages: +1`).
+0.3.0 folds `dsh-workbuddy-connect@0.7.8` into this plugin (`lib/bridge/`, byte-identical, MIT — see
+`THIRD_PARTY_NOTICES.txt`). With both installed, two `workbuddy` providers register, so the model list
+duplicates or fights itself; remove the old package when upgrading.
 
-Declaring it as a hard dependency would drag in **87 packages**, and could produce two `dsh-workbuddy-connect` instances — one at the profile root, one inside this plugin's `node_modules`. The two would read different `process.env` objects, which breaks switching. Leaving it out is deliberate, and it is why the command above names both packages.
+That merge fixes two things at once:
 
-Installing from local sources (while hacking on the plugin):
+1. **One install instead of two.** The provider and the switcher arrive together and cannot drift apart.
+2. **No more compatibility gate.** The old package pinned six `@deepseek-ai/dsh-*` peers to the exact
+   `0.2.1-rc.2`, so every DSH release refused it (see
+   [Troubleshooting → after a DSH upgrade](#after-a-dsh-upgrade-incompatible-with-the-running-dsh)).
+   This plugin declares `engines.dsh` and ranges (`>=0.2.1-rc.2 <0.3.0-0`), which the same gate accepts
+   for future rc releases — so the `allow-version` exemption added earlier can be revoked:
+
+```powershell
+dsh plugin --profile desktop revoke-version "dsh-workbuddy-connect@0.7.8" --dsh-version 0.2.1-rc.3
+```
+
+### Installing from local sources (while hacking on the plugin)
 
 ```powershell
 dsh plugin --profile desktop add "file:E:\dsh\dsh-workbuddy-switcher"
@@ -245,13 +260,17 @@ dsh plugin --profile desktop add "file:E:\dsh\dsh-workbuddy-switcher"
 > **Note**: a `file:` install **copies** rather than symlinks, and a repeated `add` is judged `Already up to date`. Either `remove` + `add`, or re-sync directly:
 >
 > ```powershell
-> Copy-Item "E:\dsh\dsh-workbuddy-switcher\lib\*" `
->   "$env:USERPROFILE\.dsh\profiles\desktop\node_modules\dsh-workbuddy-switcher\lib\" -Force
+> Copy-Item "E:\dsh\dsh-workbuddy-switcher\lib" `
+>   "$env:USERPROFILE\.dsh\profiles\desktop\node_modules\dsh-workbuddy-switcher\" -Recurse -Force
 > ```
+>
+> After editing `lib/client.js` or `lib/bridge/client.js`, run `npm run build:client` to regenerate
+> `lib/client.bundle.js` — DSH only loads the assembled bundle.
 
 ### Restart
 
-Host-side pieces (the `agent/request-error` listener and the reclaim timer) register **only at startup**, so a full quit and relaunch is required.
+Host-side pieces (the `agent/request-error` listener, the reclaim timer, the `fetch` guard) register **only at startup**, so a full quit and relaunch is required.
+
 
 ## Usage
 
@@ -372,26 +391,31 @@ The plugin uses exactly these three properties to hide the switch.
 
 ### The channel-verification shim
 
-WorkBuddy's gateway fingerprints the system prompt. Any `system` message carrying the literal
-text `DeepSeek Harness` is answered `400` / `code 11128` / `msg: Illegal API invocation from an
-unapproved channel` — the UI shows 「请求被拦截，请重新发送」 ("request intercepted, please
-resend"). The official client never sends that sentence, which is why the same account works
-inside the app.
+WorkBuddy's gateway fingerprints the system prompt. A match is answered `400` / `code 11128` /
+`msg: Illegal API invocation from an unapproved channel` — the UI shows 「请求被拦截，请重新发送」
+("request intercepted, please resend"). The official client never sends those texts, which is why
+the same account works inside the app.
 
-The plugin covers the check at the transport layer: it wraps `globalThis.fetch`, inspects only
-`POST`s whose URL contains `/v2/chat/completions`, and rewrites **every** occurrence of
-`DeepSeek Harness` in `system` / `developer` message text into `DeepSeek\u200b Harness` — the two
-words separated by a zero-width space (U+200B). The byte match stops matching; the meaning a human
-or a model reads is unchanged.
+The rule has changed twice, so the countermeasure did too:
 
-Why `dsh-workbuddy-connect` alone is not enough: it performs the same rewrite, but only on the
-**first** occurrence (`String.prototype.replace` with a string argument) — and DSH's system prompt
-now mentions the name in three places, once in the opener and twice in the runtime context. The two
-untouched occurrences are enough to re-arm the check.
+| When | Measured trigger | Fix at the time |
+|---|---|---|
+| 2026-10-22 | the literal `DeepSeek Harness` anywhere in a `system` message; one occurrence was enough | rewrite each occurrence as `DeepSeek\u200b Harness` |
+| 2026-10-28 | that stopped helping; the trigger had moved to **another long exact substring** (~110 characters, spanning sentences) | see below |
 
-Scope is deliberately narrow: only `system` / `developer` text is touched, user messages and other
-providers' requests are left alone, and a body that carries no such text is forwarded
-byte-identical.
+The 2026-10-28 finding: **any single-character edit inside** the offending span cleared it, while
+prepending or appending whole sentences did not — the signature of an exact-match blacklist, not a
+rule about a word. Chasing the phrase is therefore pointless: next time it will be different text.
+
+So the current countermeasure stops any long string from surviving: the plugin wraps
+`globalThis.fetch`, inspects only `POST`s whose URL contains `/v2/chat/completions`, and inserts a
+zero-width space (U+200B) into `system` / `developer` text roughly **every 24 characters, always
+between words**. Any exact match longer than ~30 characters is broken, and the text a human or a
+model reads is unchanged — the mark is invisible and never splits a word.
+
+Insertion points are word boundaries only, so identifiers, paths and code samples keep their
+spelling. Only instruction text is touched: user messages, tool declarations, other providers'
+requests, and bodies that need nothing are forwarded byte-identical.
 
 ### How the measurements were made
 
@@ -401,6 +425,8 @@ Every claim in this README marked as measured comes from a re-runnable script, n
 |---|---|
 | the `400` is triggered by text in the system prompt | vary only the `system` content, keep every other byte fixed, send the smallest request, compare status codes |
 | neutralising only the first occurrence is not enough | one real 8 KB prompt, first-occurrence-only vs all-occurrences: `400` vs `200` |
+| the 2026-10-28 trigger is an exact substring | bisected to a 111-character boundary; editing any character inside it → `200`, appending whole sentences → still `400`; five identical replays gave identical results |
+| one mark every ~24 characters clears it | the same real prompt plus all 108 tools: `400` without the guard, `200` with it, and the model still answered a control question correctly |
 | `rc.2` and `rc.3` differ only in their version string | `npm pack` both versions, unpack, walk every file and compare bytes; across the six packages only `package.json` differs |
 
 The last one in detail: both versions of each package were extracted side by side, every file compared
@@ -541,59 +567,54 @@ If it never shows up:
 
 ### After a DSH upgrade: "incompatible with the running DSH"
 
-`dsh-workbuddy-connect` pins six DSH runtime packages to the **exact** versions it was built against:
+**This cannot happen from 0.3.0 on.** The model provider is part of this plugin now, and both its
+peers and `engines.dsh` are declared as ranges (`>=0.2.1-rc.2 <0.3.0-0`), which the gate accepts for
+future rc releases.
 
-```
-@deepseek-ai/dsh-attachment     0.2.1-rc.2
-@deepseek-ai/dsh-home-paths     0.2.1-rc.2
-@deepseek-ai/dsh-host-webserver 0.2.1-rc.2
-@deepseek-ai/dsh-llm            0.2.1-rc.2
-@deepseek-ai/dsh-llm-pi-ai      0.2.1-rc.2
-@deepseek-ai/dsh-settings       0.2.1-rc.2
-```
-
-The moment DSH is upgraded (say to `0.2.1-rc.3`) the compatibility gate refuses it during
-composition: **every WorkBuddy model disappears** and the plugins panel says to uninstall and install
-a compatible version. Reinstalling does not help — the newest release on npm, `0.7.9`, carries the
-same exact pins.
-
-It is a **declaration mismatch, not a real incompatibility**: comparing `0.2.1-rc.2` with
-`0.2.1-rc.3` file by file, the six packages differ **only in the version strings inside
-`package.json`; code and type declarations are byte-identical** (see
+On 0.2.x — where `dsh-workbuddy-connect` was a separate package — the old plugin pinned six DSH
+runtime packages to the **exact** versions it was built against, so the moment DSH was upgraded (say
+to `0.2.1-rc.3`) the gate refused it during composition: **every WorkBuddy model disappeared**.
+Reinstalling did not help — the newest release on npm, `0.7.9`, carries the same exact pins. It was a
+**declaration mismatch, not a real incompatibility**: comparing `0.2.1-rc.2` with `0.2.1-rc.3` file by
+file, the six packages differ **only in the version strings inside `package.json`; code and type
+declarations are byte-identical** (see
 [How the measurements were made](#how-the-measurements-were-made)).
 
-DSH ships an official exemption mechanism for exactly this — no code needs patching:
+Two ways out, the first recommended:
 
 ```powershell
-# 1. exempt this exact package@version on this exact runtime
+# 1 (recommended): upgrade to 0.3.0 — the provider is bundled and declared as a range
+dsh plugin --profile desktop remove dsh-workbuddy-connect
+dsh plugin --profile desktop add "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git#v0.3.0"
+
+# 2 (temporary): keep the old package and exempt it with DSH's own mechanism
 dsh plugin --profile desktop allow-version "dsh-workbuddy-connect@0.7.8" --dsh-version "$(dsh --version)" --accept-risk
-
-# 2. confirm
-dsh plugin --profile desktop version-exemptions
-
-# 3. fully quit and relaunch DSH
+dsh plugin --profile desktop version-exemptions   # confirm
 ```
 
 The grant is written to `<profile>/compatibility.json` as `package@version -> allowed runtime
 versions`. It **survives restarts and plugin reinstalls**, but **every DSH upgrade needs a fresh
-grant** — by design, since the approval covers that one exact pair. Revoke it with `revoke-version`.
-
-> The real fix belongs upstream: give `dsh-workbuddy-connect` an
-> `engines.dsh: ">=0.2.1-rc.2 <0.3.0-0"`, or turn those peers into ranges. Until then, each DSH
-> upgrade costs one exemption.
+grant** — by design, since the approval covers that one exact pair. Revoke it with `revoke-version`;
+after taking route 1 the grant is dead weight and can be removed.
 
 ### Upstream answers 「请求被拦截，请重新发送」 (`400` / `code 11128`)
 
-That is the gateway's channel verification, and it has **nothing to do with the account** — switching
-will not help. From v0.2.5 the plugin covers it at the transport layer (see
+That is the gateway's channel fingerprint check, and it has **nothing to do with the account** —
+switching will not help. The plugin covers it at the transport layer (see
 [The channel-verification shim](#the-channel-verification-shim)); it takes effect only after a
 **full quit and relaunch of DSH**, because the `fetch` wrapper is installed at startup.
 
-If the same error survives the restart:
+The rule changes over time (2026-10-22 and 2026-10-28 were not even the same trigger condition), which
+is why the guard targets no particular phrase but breaks every long exact match. If the error still
+survives a restart:
 
-1. check the settings card reports plugin version `0.2.5` or newer
-2. check that `lib/channel-guard.js` exists in the profile's
-   `node_modules/dsh-workbuddy-switcher`
+1. check the settings card reports plugin version `0.3.0` or newer (0.2.5–0.2.6 only cover the
+   October 22 rule)
+2. check that `lib/channel-guard.js` exists in the profile's `node_modules/dsh-workbuddy-switcher`
+3. if the rule has changed again, open an issue with the error and the system prompt in force — the
+   bisecting method in [How the measurements were made](#how-the-measurements-were-made) finds the
+   new trigger
+
 
 ### Auto-rotation does nothing
 

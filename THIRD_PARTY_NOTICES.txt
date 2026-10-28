@@ -1,0 +1,30 @@
+# Third-party notices
+
+## dsh-workbuddy-connect
+
+`lib/bridge/` is a vendored copy of **dsh-workbuddy-connect 0.7.8** by corrinehu
+(https://github.com/corrinehu/dsh-workbuddy-connect), MIT licensed. The host bundle
+(`lib/bridge/index.js`, `lib/bridge/host-heartbeat-sjotAEdb.js`, `lib/bridge/bin.js`)
+is byte-identical to that release, and is carried inside this package so one install
+provides both the WorkBuddy model provider and the account switcher.
+
+The browser bundle (`lib/bridge/client.js`) differs from the release in exactly two
+string literals, both about how the Plugins page routes the configuration card:
+
+- `BUNDLE_NAME` — `"dsh-workbuddy-connect"` becomes `"dsh-workbuddy-switcher"`
+- the `plugins.bundle.config` slot `key` — same change
+
+The Plugins page dispatches that slot by the **installed package name**, so without
+the change the vendored card would register under a key nothing dispatches to and
+the WorkBuddy settings card would silently not render. Nothing else in the file was
+touched: the module id, route paths, settings namespaces, cache keys and UI copy all
+still say `dsh-workbuddy-connect`, because the host half registers its routes under
+that name.
+
+Behaviour this plugin adds around the bridge lives in its own modules
+(`lib/channel-guard.js` and the rest of `lib/`), and the browser half is assembled
+into `lib/client.bundle.js` by `scripts/build-client.mjs` without further edits.
+
+Its MIT licence text is kept beside the code at `lib/bridge/LICENSE.txt`, and the
+release it was taken from is recorded in `lib/bridge/THIRD_PARTY_NOTICES.txt`.
+

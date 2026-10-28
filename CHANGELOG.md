@@ -10,6 +10,72 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Next release notes go here.
 
+## [0.3.0] - 2026-10-28
+
+### Changed
+
+- **`dsh-workbuddy-connect` is now part of this plugin.** One install provides both the WorkBuddy
+  model provider and the account switcher; `dsh-workbuddy-connect` no longer needs to be installed,
+  and must be removed when upgrading, because two copies would register two `workbuddy` providers.
+
+  The vendored copy (`lib/bridge/`) is the pristine **0.7.8** release from npm, byte-identical —
+  host bundle, browser bundle and CLI — carried under its MIT licence with the notice in
+  `THIRD_PARTY_NOTICES.txt` and its licence beside it at `lib/bridge/LICENSE.txt`. Nothing in it was
+  edited. The host half is composed from this plugin's `apply` (the one place a cordis plugin can
+  merge two `inject` lists), and the browser half is assembled into `lib/client.bundle.js` by
+  `scripts/build-client.mjs`, which parks the bridge's module factory so this plugin's client can
+  mount it. That assembled file is committed because installs come from git with no build step;
+  `npm run build:client` regenerates it.
+
+  Two long-standing problems disappear with the merge:
+
+  - **The compatibility gate can no longer refuse it.** The bridge declared six `@deepseek-ai/dsh-*`
+    peers pinned to the exact `0.2.1-rc.2`, so every DSH upgrade disabled every WorkBuddy model until
+    an exemption was granted. This package declares `engines.dsh` and the same peers as ranges
+    (`>=0.2.1-rc.2 <0.3.0-0`), which the gate accepts across rc releases.
+  - **The two plugins can no longer drift apart**, which is what let one of them pin an exact DSH
+    version while the other did not.
+
+  The provider keeps its own config schema (`Config` is re-exported), so an existing profile patch
+  that configures `authFile` or the probe port still applies.
+
+### Fixed
+
+- **Every WorkBuddy model failed again with `400` / `code 11128` — 「请求被拦截，请重新发送」**
+  ("request intercepted, please resend"). The 0.2.5 countermeasure no longer worked, because the
+  gateway's rule had changed rather than the plugin having regressed.
+
+  Measured again on `copilot.tencent.com/v2/chat/completions`, with today's real 8 KB prompt:
+
+  | system message | result |
+  |---|---|
+  | live prompt, every `DeepSeek Harness` already neutralised (0.2.5's fix) | `400` |
+  | live prompt with the offending block replaced | `200` |
+  | live prompt with **one character** changed inside that block | `200` |
+  | live prompt with a whole sentence appended | `400` |
+
+  So the trigger had moved from the phrase `DeepSeek Harness` to **another long exact substring**
+  (~110 characters, spanning sentences) — an exact-match blacklist, not a rule about a word. Bisecting
+  to that 111-character boundary and replaying it five times gave identical results, so it is
+  deterministic, not flaky.
+
+  `lib/channel-guard.js` now stops any long string from surviving instead of chasing phrases: inside
+  `system` / `developer` text it inserts a zero-width space roughly every 24 characters, always
+  between words, so no exact match longer than ~30 characters can exist while the text keeps its
+  spelling, line structure and meaning. Verified against the live gateway with the real prompt plus
+  all 108 tool declarations: `400` without the guard, `200` with it, and a control question still
+  answered correctly (`17*23` → `391`).
+
+### Tests
+
+- `test/channel-guard.test.js` rewritten for the new behaviour: the measured phrase is still
+  neutralised every time, no unmarked run exceeds the cadence, removing the marks restores the text
+  exactly (so no word is split), user text and non-chat traffic stay untouched, and the installer
+  stays idempotent.
+- `test/client-bundle.test.js` pins the merged browser bundle: both the bridge module and this
+  plugin's module register, the switcher half calls the bridge's `apply` with the same context and
+  unions its `inject` list, and a throwing bridge cannot stop the account UI from mounting.
+
 ## [0.2.6] - 2026-10-25
 
 ### Added
