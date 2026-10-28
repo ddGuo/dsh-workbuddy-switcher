@@ -5,6 +5,8 @@ import {
   installUpstreamRetry,
   isChannelRejection,
   neutralizeChatBodyEverywhere,
+  readGuardState,
+  resetGuardState,
 } from '../lib/channel-guard.js';
 
 const RAW = 'DeepSeek Harness';
@@ -175,4 +177,105 @@ test('the retry wrapper is installed once and restores its predecessor', async (
   assert.equal(Client.prototype.chatStream, wrapped, 'the inner dispose must not unwrap a live wrapper');
   first();
   assert.equal(Client.prototype.chatStream, original);
+});
+
+test('a recovered escalation counts, is reported, and reports no failure', async () => {
+  resetGuardState();
+  const events = [];
+  const before = readGuardState();
+  class Client {
+    constructor() {
+      this.calls = 0;
+    }
+    async chatStream() {
+      this.calls += 1;
+      return this.calls === 1 ? channelRejection() : { ok: true, status: 200 };
+    }
+  }
+  const restore = installUpstreamRetry(Client, { onRejection: (event) => events.push(event) });
+  try {
+    await new Client().chatStream({}, body([{ role: 'user', content: 'please inspect the checkout' }]));
+    const after = readGuardState();
+    assert.equal(after.escalations - before.escalations, 1);
+    assert.equal(after.unrecovered, 0, 'a recovered request must not be counted as a failure');
+    assert.ok(after.lastEscalationAt > 0);
+    assert.equal(events.length, 1);
+    assert.equal(events[0].recovered, true);
+  } finally {
+    restore();
+    resetGuardState();
+  }
+});
+
+test('an escalation the gateway also rejects is counted as unrecovered and reported as a failure', async () => {
+  resetGuardState();
+  const events = [];
+  class Client {
+    async chatStream() {
+      return channelRejection();
+    }
+  }
+  const restore = installUpstreamRetry(Client, { onRejection: (event) => events.push(event) });
+  try {
+    const result = await new Client().chatStream({}, body([{ role: 'user', content: 'please inspect the checkout' }]));
+    assert.equal(result.ok, false, 'the rejection must still surface to the caller');
+    const state = readGuardState();
+    assert.equal(state.escalations, 1);
+    assert.equal(state.unrecovered, 1);
+    assert.ok(state.lastUnrecoveredAt > 0);
+    assert.equal(state.lastDetail, 'the marked body was rejected as well');
+    assert.equal(events.length, 1);
+    assert.equal(events[0].recovered, false);
+  } finally {
+    restore();
+    resetGuardState();
+  }
+});
+
+test('a healthy request leaves the counters at zero', async () => {
+  resetGuardState();
+  const events = [];
+  class Client {
+    async chatStream() {
+      return { ok: true, status: 200 };
+    }
+  }
+  const restore = installUpstreamRetry(Client, { onRejection: (event) => events.push(event) });
+  try {
+    await new Client().chatStream({}, body([{ role: 'user', content: 'hi' }]));
+    const state = readGuardState();
+    assert.equal(state.escalations, 0);
+    assert.equal(state.unrecovered, 0);
+    assert.equal(events.length, 0, 'a healthy install must stay quiet');
+  } finally {
+    restore();
+  }
+});
+
+test('a rejection with nothing left to mark is reported without a second request', async () => {
+  resetGuardState();
+  const events = [];
+  const calls = [];
+  class Client {
+    async chatStream(credential, bodyJson) {
+      calls.push(bodyJson);
+      return channelRejection();
+    }
+  }
+  const restore = installUpstreamRetry(Client, { onRejection: (event) => events.push(event) });
+  try {
+    // A body with no messages and no tools has no string to mark, so escalating
+    // it would resend the identical request for nothing.
+    await new Client().chatStream({}, JSON.stringify({ model: 'deepseek-v4.1-flash', stream: true }));
+    assert.equal(calls.length, 1, 'an unmarkable body must not be resent');
+    const state = readGuardState();
+    assert.equal(state.escalations, 0);
+    assert.equal(state.unrecovered, 1);
+    assert.equal(state.lastDetail, 'a channel rejection arrived for a body that carried nothing to mark');
+    assert.equal(events.length, 1);
+    assert.equal(events[0].recovered, false);
+  } finally {
+    restore();
+    resetGuardState();
+  }
 });

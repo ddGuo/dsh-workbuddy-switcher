@@ -12,6 +12,30 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.3.3] - 2026-10-28
 
+### Added
+
+- **The guard now reports what it had to do, so a silent regression cannot hide
+  for a day again.** The 0.3.2 loss was invisible: the fetch wrapper was disabled
+  by another plugin's `undici` import, every WorkBuddy request was rejected, and
+  nothing said so until a turn failed mid-work.
+
+  `readGuardState()` counts this, without spending a request of its own:
+
+  | field | meaning |
+  |---|---|
+  | `escalations` | rejected-then-retried requests; the guard ran and recovered |
+  | `unrecovered` | escalations the gateway refused as well — the alarm |
+  | `lastEscalationAt` / `lastUnrecoveredAt` | when each last happened |
+  | `lastDetail` | which of the three paths produced the last event |
+
+  `installUpstreamRetry` gained an `onRejection({ recovered, detail })` sink, and
+  `lib/index.js` logs through it: `warn` when a request was saved, `error` —
+  naming the upgrade — when the marked body was rejected too. A healthy install
+  logs nothing at all, so any output here means something real happened. The
+  counters ride the existing retry path, so this adds no traffic, and they are
+  exposed as `channelGuard` in the plugin's
+  `GET /plugins/dsh-workbuddy-switcher/accounts` response for the panel.
+
 ### Fixed
 
 - **`400` / `11128` 请求被拦截 came back when the fetch guard was not the outermost
