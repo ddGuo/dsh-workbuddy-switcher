@@ -216,7 +216,7 @@ Install the dsh-workbuddy-switcher plugin (https://github.com/ddGuo/dsh-workbudd
 Or run the equivalent command yourself — **re-running it is the update**, pinned to the current release:
 
 ```powershell
-dsh plugin --profile desktop add "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git#v0.3.4" --config.strict-dep-builds=false
+dsh plugin --profile desktop add "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git#v0.3.5" --config.strict-dep-builds=false
 ```
 
 To follow the trunk instead (every `add` pulls the newest commit):
@@ -225,7 +225,7 @@ To follow the trunk instead (every `add` pulls the newest commit):
 dsh plugin --profile desktop add "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git" --config.strict-dep-builds=false
 ```
 
-> - The `#v0.3.4` above is a **fixed release tag** and never drifts; drop it to follow the newest commit on `main`. Use tags for a settled install, `main` while developing.
+> - The `#v0.3.5` above is a **fixed release tag** and never drifts; drop it to follow the newest commit on `main`. Use tags for a settled install, `main` while developing.
 > - If this plugin is already installed from a `file:` path, this command switches it to the git source (the output shows a `- dsh-workbuddy-switcher` / `+ dsh-workbuddy-switcher <new version>` pair); to stay on your local checkout, use the local-source command below instead.
 > - Re-`add`ing the **same** `file:` path only prints `Already up to date` — edited sources are not copied over.
 
@@ -237,7 +237,7 @@ names, duplicating or tangling the model list.
 
 ```powershell
 dsh plugin --profile desktop remove dsh-workbuddy-connect
-dsh plugin --profile desktop add "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git#v0.3.4" --config.strict-dep-builds=false
+dsh plugin --profile desktop add "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git#v0.3.5" --config.strict-dep-builds=false
 ```
 
 If the old package was never installed, run only the second line. Its `llm-workbuddy` provider row

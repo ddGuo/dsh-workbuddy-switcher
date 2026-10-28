@@ -10,6 +10,45 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Next release notes go here.
 
+## [0.3.5] - 2026-10-28
+
+### Added
+
+- **A dead login can be revived from the app, without deleting the archive.**
+  `12153` means the refresh token itself was revoked upstream: no amount of
+  waiting renews it, and the only source of a working token is a fresh sign-in
+  in the desktop app. Neither existing import mode could deliver that copy —
+  the sweep's phone patch deliberately keeps the archived tokens, and
+  `requireNew` skips a file whose tokens look unchanged — so the documented
+  recovery was "delete the row and import again", which loses the archive's
+  phone label and any history attached to that file.
+
+  `importCurrent` gained a `replace` mode that overwrites the archived tokens
+  from the app's copy and clears the dead verdict, and the panel shows a
+  「重新导入」 button on exactly the rows that carry the 「需重新登录」 badge.
+  The automatic sweep uses the same path: when the app is signed in to an
+  account this plugin has written off, its tokens are replaced rather than
+  preserved, because the app's copy is the only thing that can revive it.
+
+  Verified end to end through the running host: a replace on a `refresh_dead`
+  archive moved it from `dead` to `already` with its streak intact
+  (128a8f9c: `auth`/`refreshDead` → `already`, streak 10), and the phone label
+  survived the write.
+
+- `replace` takes an `expectUid`, and the per-row button sends it. The desktop
+  app holds one login at a time, so a replace aimed at a different row would
+  otherwise overwrite the wrong archive with that login's tokens. A mismatch now
+  returns `undefined` and the panel says the app is signed in to another account
+  instead of silently rewriting something else.
+
+### Tests
+
+- `test/import-replace.test.js` pins the three modes and their precedence: the
+  phone patch can never overwrite tokens (even with `replace` alongside),
+  `requireNew` stays a no-op for an unchanged archive, `replace` overwrites even
+  when the archive looks identical — the case that could never be recovered —
+  and a dead archive reaches `replace` ahead of the phone-patch branch.
+
 ## [0.3.4] - 2026-10-28
 
 ### Fixed
