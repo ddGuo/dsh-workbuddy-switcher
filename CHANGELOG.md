@@ -10,6 +10,49 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Next release notes go here.
 
+## [0.3.4] - 2026-10-28
+
+### Fixed
+
+- **An account that had already collected its credits was reported as
+  「签到失败 · 异常」, and the retry schedule then hid it for the rest of the day.**
+  The gateway answers a second claim with `400` / `code 10001`
+  (「今天已签到，请明天再来」) — measured on two live accounts. `classifyFailure`
+  looked at the HTTP status first, so a settled day fell through to `unknown`,
+  and `checkinRetryAt` gave `unknown` a backoff: the panel showed a failure and
+  the sweep stopped looking. The business code is now checked before the status,
+  so `10001` becomes `already` with its credit and streak intact.
+
+- **A rejected refresh token was invisible to rotation, so it kept being
+  picked.** `refreshExpiresAt` is a static claim written at capture time; a token
+  can be refused long before that date, and `pickAccount` sorted by that field
+  alone. A dead archive therefore outranked a live one, was selected, failed, and
+  burned a turn every time. Measured on this machine: 7 of 9 archives answer
+  `12153: refresh token is invalid` while still carrying the *latest* static
+  expiry. The sweep now records that verdict (`dead.accounts[file]`), and both
+  `pickAccount` and the reclaim sweep skip those files; the panel shows a
+  「需重新登录」 badge so a dead row no longer looks available.
+
+- **A transient renewal failure was classified as a permanent dead login.** When
+  the 401 could not be renewed, every cause collapsed into `auth`: a rejected
+  refresh token, a gateway fault, and a transport error all looked the same. Only
+  the first is permanent — and because `auth` carries no retry backoff, the other
+  two were never retried that day either. `renewCredentialDetailed` now reports
+  why, and the transient cases become `network`, which the sweep retries.
+
+### Added
+
+- `renewCredentialDetailed` alongside `renewCredential`, returning
+  `{ renewed, refreshRejected, reason }`. `renewCredential` keeps its signature
+  and is now a thin wrapper, so nothing that already calls it changes.
+
+### Tests
+
+- `test/checkin-classification.test.js` pins the measured cases: `10001` reads as
+  `already` and survives the HTTP status; a coded 401 keeps its code; rotation
+  prefers the longest-lived *live* account over a longer-lived dead one; and the
+  permanent/transient split decides whether a retry is scheduled.
+
 ## [0.3.3] - 2026-10-28
 
 ### Added
