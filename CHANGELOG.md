@@ -10,6 +10,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Next release notes go here.
 
+## [0.3.2] - 2026-10-28
+
+### Changed
+
+- **Published to npm.** `npm i dsh-workbuddy-switcher` and
+  `dsh plugin --profile <p> add dsh-workbuddy-switcher` now work alongside the git source.
+
+  Making the package correct for a registry needed three manifest changes that the git install
+  never exercised:
+
+  - `repository`, `homepage` and `bugs` now point at the GitHub repo, so npm's page links back to
+    the source instead of showing an empty sidebar;
+  - the READMEs' screenshots were referenced as `docs/*.png` but `files` did not include them, so
+    every image would have been a broken link on npm — `docs/*.png` is packaged (the design note
+    `docs/checkin-plan.md` stays out);
+  - `scripts/` is packaged, because the README tells contributors to run `npm run build:client`
+    after editing either client half, and that script was not shipped.
+
+  Tarball: 24 files, 625 kB packed, 1.3 MB unpacked. `npm publish --dry-run` is clean, and no source
+  file changed — the 43 tests still pass unmodified.
+
 ## [0.3.1] - 2026-10-28
 
 ### Changed

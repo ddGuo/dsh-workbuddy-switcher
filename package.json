@@ -2,7 +2,7 @@
   "name": "dsh-workbuddy-switcher",
   "displayName": "DSH WorkBuddy Switcher",
   "description": "Bring WorkBuddy desktop app models into DeepSeek Harness with one install — manage a local pool of accounts, switch between them, and rotate automatically when an account runs out of quota.",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "author": "guoding",
   "contributors": [
     "corrinehu (dsh-workbuddy-connect, vendored under lib/bridge)"
@@ -18,6 +18,12 @@
   ],
   "type": "module",
   "main": "lib/index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git"
+  },
+  "homepage": "https://github.com/ddGuo/dsh-workbuddy-switcher#readme",
+  "bugs": "https://github.com/ddGuo/dsh-workbuddy-switcher/issues",
   "exports": {
     ".": "./lib/index.js",
     "./client": "./lib/client.bundle.js",
@@ -30,6 +36,8 @@
   },
   "files": [
     "lib",
+    "scripts",
+    "docs/*.png",
     "cordis.patch.yml",
     "README.md",
     "README.en.md",
