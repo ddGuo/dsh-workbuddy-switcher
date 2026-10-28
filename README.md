@@ -4,13 +4,13 @@
 
 在 DeepSeek Harness 里管理一组 WorkBuddy 账号，随时切换；**账号额度用尽时自动换号并重试当前请求**。
 
-> 这是 [`dsh-workbuddy-connect`](https://github.com/corrinehu/dsh-workbuddy-connect) 的配套插件。后者负责把 WorkBuddy 的模型接进 DSH，本插件负责在多个账号之间调度。
+一个插件装完就能用：把 WorkBuddy 的模型接进 DSH 的那部分（模型提供者、凭据读取、用量与签到接口）已经内置在本包里，不需要再装别的东西。
 
 ---
 
 ## 解决的痛点
 
-`dsh-workbuddy-connect` 一次只能使用一个账号，切换账号要么重开 WorkBuddy 客户端登录，要么手改配置文件。而 WorkBuddy 每天有额度上限，一个账号用完后当天就不能再用了。
+WorkBuddy 一次只能使用一个账号，切换账号要么重开 WorkBuddy 客户端登录，要么手改配置文件。而 WorkBuddy 每天有额度上限，一个账号用完后当天就不能再用了。
 
 多台机器（比如公司和家里）之间，账号库还是各自独立的——在 A 机器上登录过的账号，B 机器上得重新登录一遍。
 
@@ -205,15 +205,13 @@ WorkBuddy 对**单个模型被限流**和**账号积分用尽**返回的是同�
 把下面这句交给本机已有的 Agent（这个 DSH 会话就够用）：没装就装，装了但不是最新版就更新。
 
 ```text
-安装 dsh-workbuddy-switcher 插件（https://github.com/ddGuo/dsh-workbuddy-switcher），本机没有就装，已有但不是最新版就更新；如果装过 dsh-workbuddy-connect，先把它卸掉。装完提醒我完全退出并重开 DSH。
+安装 dsh-workbuddy-switcher 插件（https://github.com/ddGuo/dsh-workbuddy-switcher），本机没有就装，已有但不是最新版就更新。装完提醒我完全退出并重开 DSH。
 ```
 
-自己跑也行，等价的两条命令（**重复执行即更新**，固定在当前发布的版本）：
+自己跑也行，等价的一条命令（**重复执行即更新**，固定在当前发布的版本）：
 
 ```powershell
-# 0.3.0 起，WorkBuddy 模型提供者已经并进本插件；旧的独立插件必须卸掉，否则两个 provider 会打架
-dsh plugin --profile desktop remove dsh-workbuddy-connect
-dsh plugin --profile desktop add "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git#v0.3.0" --config.strict-dep-builds=false
+dsh plugin --profile desktop add "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git#v0.3.1" --config.strict-dep-builds=false
 ```
 
 想跟随主干（每次 `add` 都拉最新提交）：
@@ -222,22 +220,28 @@ dsh plugin --profile desktop add "git+https://github.com/ddGuo/dsh-workbuddy-swi
 dsh plugin --profile desktop add "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git" --config.strict-dep-builds=false
 ```
 
-> - 上面的 `#v0.3.0` 是**固定的发布标签**，不会随时间漂移；去掉它就变成跟随 `main` 的最新提交。生产环境建议用标签，本地开发用 `main`。
+> - 上面的 `#v0.3.1` 是**固定的发布标签**，不会随时间漂移；去掉它就变成跟随 `main` 的最新提交。生产环境建议用标签，本地开发用 `main`。
 > - 已经是 `file:` 安装的，这条会顺手换成 git 来源（输出里会出现 `- dsh-workbuddy-switcher` / `+ dsh-workbuddy-switcher <新版本>` 这一对）；想继续用本地源码，改用下面「从本地源码装」那条。
 > - 对**同一个** `file:` 路径重复 `add`，pnpm 只会回 `Already up to date`，改过的源码不会同步过去。
 
-### 从 0.2.x 升级：必须卸掉 dsh-workbuddy-connect
+### 从 0.2.x 升级
 
-0.3.0 把 `dsh-workbuddy-connect@0.7.8` 整个并进了本插件（`lib/bridge/`，字节未改，MIT，见 `THIRD_PARTY_NOTICES.txt`）。两个包都装着会注册两个 `workbuddy` provider，模型列表会重复甚至打架，所以升级时先 `remove` 掉旧插件。
-
-顺带解决了两件事：
-
-1. **不用再装两个插件。** 一个包装完就有模型提供者 + 账号切换。
-2. **不再被 DSH 的版本兼容闸门拦下。** 旧插件把 6 个 `@deepseek-ai/dsh-*` peer 精确锁死在 `0.2.1-rc.2`，DSH 一升级它就被拒（详见「排障 → DSH 升级后提示不兼容」）。本插件的 peer 写成 `>=0.2.1-rc.2 <0.3.0-0` 的范围，并声明 `engines.dsh`，所以同一条兼容闸门对未来 rc 版本直接放行，之前给旧插件加的 `allow-version` 豁免可以删掉：
+0.3.0 把模型提供者并进了本插件，所以升级时**先卸掉旧插件、并清掉它留下的 `workbuddy` 层**——留着会有两个 provider 抢同一个模型名，模型列表重复甚至打架。
 
 ```powershell
-dsh plugin --profile desktop revoke-version "dsh-workbuddy-connect@0.7.8" --dsh-version 0.2.1-rc.3
+dsh plugin --profile desktop remove dsh-workbuddy-connect
+dsh plugin --profile desktop add "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git#v0.3.1" --config.strict-dep-builds=false
 ```
+
+旧插件没装过就只跑第二条。它自带的 `llm-workbuddy` 提供者层随包一起消失，现在由本插件那一行（`id: workbuddy-switcher`）承载，所以要配置提供者（`authFile`、探针端口等）就写在那一行下面。
+
+如果之前给旧插件加过版本兼容豁免，顺手撤销：
+
+```powershell
+dsh plugin --profile desktop version-exemptions   # 看还有没有
+```
+
+本插件的 peer 与 `engines.dsh` 都写成了范围（`>=0.2.1-rc.2 <0.3.0-0`），DSH 升级不会再被兼容闸门拦住，所以这类豁免已经没用。
 
 ### 从本地源码装（改代码时用）
 
@@ -316,7 +320,7 @@ Host 侧组件（`agent/request-error` 监听器、回收定时器、`fetch` 兜
 
 ### 切换机制
 
-`dsh-workbuddy-connect` 的凭据解析顺序是「配置的 `authFile` → 环境变量 → 平台默认路径」，且**每次解析都会重新读取 `process.env`**。
+内置的模型提供者按「配置的 `authFile` → 环境变量 → 平台默认路径」的顺序解析凭据，且**每次解析都会重新读取 `process.env`**。
 
 所以切换只需要两步：
 
@@ -513,7 +517,7 @@ Date.UTC(y, m - 1, d, h, min, s) - 8 * 3600 * 1000
 
 ### 切换后模型列表没变
 
-`dsh-workbuddy-connect` 有 30 秒的凭据轮询周期。插件切换后会主动触发刷新，但如果失败，等 30 秒即可。也可以点「刷新模型」强制重取。
+模型提供者有 30 秒的凭据轮询周期。插件切换后会主动触发刷新，但如果失败，等 30 秒即可。也可以点「刷新模型」强制重取。
 
 ### 模型分组消失了
 
@@ -537,30 +541,24 @@ Date.UTC(y, m - 1, d, h, min, s) - 8 * 3600 * 1000
 
 ### DSH 升级后提示「与当前 DSH 不兼容」
 
-**0.3.0 起不会再有这个问题**：模型提供者已并进本插件，而且 peer 与 `engines.dsh` 都写成了范围
+**0.3.0 起不会再有这个问题**：模型提供者已内置在本插件，peer 与 `engines.dsh` 都写成了范围
 （`>=0.2.1-rc.2 <0.3.0-0`），同一条兼容闸门对未来 rc 版本直接放行。
 
-如果你还在 0.2.x（装的是独立的 `dsh-workbuddy-connect`），那就是旧插件的锅：它把 6 个 DSH 运行包
-**精确锁死**在 `0.2.1-rc.2`，DSH 一升级就被拦在组合阶段，**WorkBuddy 模型整体消失**。npm 上最新的
-`0.7.9` 也是同样的精确锁，所以「重装」解决不了。这是**声明问题，不是真的不兼容**：逐包对比
-`0.2.1-rc.2` 与 `0.2.1-rc.3`，六个包**只有 `package.json` 里的版本号不同，代码与类型声明逐字节一致**
-（见 [验证方式](#验证方式)）。
+0.2.x 时代之所以会被拦，是因为提供者当时是独立包，把 6 个 DSH 运行包**精确锁死**在发版时的版本，
+DSH 一升级就被拦在组合阶段，**WorkBuddy 模型整体消失**。而逐包对比 `0.2.1-rc.2` 与 `0.2.1-rc.3`
+可以看到，六个包**只有 `package.json` 里的版本号不同，代码与类型声明逐字节一致**
+（见 [验证方式](#验证方式)）——是声明问题，不是真的不兼容。
 
-两条出路，推荐第一条：
+按 [从 0.2.x 升级](#从-02x-升级) 升到 0.3.0 即可。如果你暂时要留在 0.2.x，可以用 DSH 官方的
+精确版本豁免放行，代价是**DSH 每升级一次都要重新授权**：
 
 ```powershell
-# 1（推荐）：升级到 0.3.0，provider 已内置且声明为范围
-dsh plugin --profile desktop remove dsh-workbuddy-connect
-dsh plugin --profile desktop add "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git#v0.3.0"
-
-# 2（临时）：继续用旧插件，用 DSH 官方的精确版本豁免放行
-dsh plugin --profile desktop allow-version "dsh-workbuddy-connect@0.7.8" --dsh-version "$(dsh --version)" --accept-risk
+dsh plugin --profile desktop allow-version "<包名>@<版本>" --dsh-version "$(dsh --version)" --accept-risk
 dsh plugin --profile desktop version-exemptions   # 确认
 ```
 
-豁免写进 `<profile>/compatibility.json`（`包名@版本 → 允许的运行版本`），重启不丢、重装插件不丢，
-但 **DSH 每升级一次都要重新授权**；撤销用 `revoke-version`。走第一条升级路线后，这条豁免就没用了，
-可以顺手删掉。
+豁免写进 `<profile>/compatibility.json`（`包名@版本 → 允许的运行版本`），重启不丢、重装插件不丢；
+撤销用 `revoke-version`。
 
 ### 上游报「请求被拦截，请重新发送」（`400` / `code 11128`）
 
@@ -666,4 +664,9 @@ MIT。见 [LICENSE](./LICENSE)。
 
 ## 相关项目
 
-- [`dsh-workbuddy-connect`](https://github.com/corrinehu/dsh-workbuddy-connect) — 把 WorkBuddy 模型接入 DSH（本插件依赖它）
+- [DeepSeek Harness](https://github.com/deepseek-ai) — 本插件运行的内核
+
+## 第三方代码
+
+模型提供者部分（`lib/bridge/`）来自 corrinehu 的 `dsh-workbuddy-connect`，MIT 授权，原样内置。
+授权与改动说明见 [THIRD_PARTY_NOTICES.txt](./THIRD_PARTY_NOTICES.txt)。

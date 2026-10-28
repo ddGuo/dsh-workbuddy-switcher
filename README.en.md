@@ -4,13 +4,13 @@ English | [中文](./README.md)
 
 Manage a pool of WorkBuddy accounts inside DeepSeek Harness and switch between them at will — with **automatic rotation when an account runs out of quota**.
 
-> A companion plugin for [`dsh-workbuddy-connect`](https://github.com/corrinehu/dsh-workbuddy-connect). That plugin brings WorkBuddy models into DSH; this one schedules work across multiple accounts.
+One install is all it takes: the half that brings WorkBuddy models into DSH (the model provider, credential reading, the billing and check-in endpoints) is built into this package, so nothing else needs installing.
 
 ---
 
 ## The problem
 
-`dsh-workbuddy-connect` uses one account at a time. Switching means either signing in again inside the WorkBuddy desktop app or hand-editing a config file. WorkBuddy also has a daily quota, so once an account is exhausted it is unusable for the rest of the day.
+WorkBuddy uses one account at a time. Switching means either signing in again inside the WorkBuddy desktop app or hand-editing a config file. WorkBuddy also has a daily quota, so once an account is exhausted it is unusable for the rest of the day.
 
 Across machines — the office and home, say — the archives are also independent: an account signed in on machine A has to be signed in again on machine B.
 
@@ -210,16 +210,13 @@ check-in do not interfere**.
 Hand the line below to the Agent already running on this machine (this DSH session is enough): it installs the plugin if missing and updates it when it is not current.
 
 ```text
-Install the dsh-workbuddy-switcher plugin (https://github.com/ddGuo/dsh-workbuddy-switcher): install it if missing, update it if it is not the latest, and remove dsh-workbuddy-connect first if it is still installed. When done, remind me to fully quit and relaunch DSH.
+Install the dsh-workbuddy-switcher plugin (https://github.com/ddGuo/dsh-workbuddy-switcher): install it if missing, update it if it is not the latest. When done, remind me to fully quit and relaunch DSH.
 ```
 
-Or run the equivalent commands yourself — **re-running them is the update**, pinned to the current release:
+Or run the equivalent command yourself — **re-running it is the update**, pinned to the current release:
 
 ```powershell
-# from 0.3.0 the WorkBuddy model provider ships inside this plugin, so the old standalone
-# plugin must go — two copies would register two `workbuddy` providers
-dsh plugin --profile desktop remove dsh-workbuddy-connect
-dsh plugin --profile desktop add "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git#v0.3.0" --config.strict-dep-builds=false
+dsh plugin --profile desktop add "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git#v0.3.1" --config.strict-dep-builds=false
 ```
 
 To follow the trunk instead (every `add` pulls the newest commit):
@@ -228,28 +225,33 @@ To follow the trunk instead (every `add` pulls the newest commit):
 dsh plugin --profile desktop add "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git" --config.strict-dep-builds=false
 ```
 
-> - The `#v0.3.0` above is a **fixed release tag** and never drifts; drop it to follow the newest commit on `main`. Use tags for a settled install, `main` while developing.
+> - The `#v0.3.1` above is a **fixed release tag** and never drifts; drop it to follow the newest commit on `main`. Use tags for a settled install, `main` while developing.
 > - If this plugin is already installed from a `file:` path, this command switches it to the git source (the output shows a `- dsh-workbuddy-switcher` / `+ dsh-workbuddy-switcher <new version>` pair); to stay on your local checkout, use the local-source command below instead.
 > - Re-`add`ing the **same** `file:` path only prints `Already up to date` — edited sources are not copied over.
 
-### Upgrading from 0.2.x: remove dsh-workbuddy-connect
+### Upgrading from 0.2.x
 
-0.3.0 folds `dsh-workbuddy-connect@0.7.8` into this plugin (`lib/bridge/`, byte-identical, MIT — see
-`THIRD_PARTY_NOTICES.txt`). With both installed, two `workbuddy` providers register, so the model list
-duplicates or fights itself; remove the old package when upgrading.
-
-That merge fixes two things at once:
-
-1. **One install instead of two.** The provider and the switcher arrive together and cannot drift apart.
-2. **No more compatibility gate.** The old package pinned six `@deepseek-ai/dsh-*` peers to the exact
-   `0.2.1-rc.2`, so every DSH release refused it (see
-   [Troubleshooting → after a DSH upgrade](#after-a-dsh-upgrade-incompatible-with-the-running-dsh)).
-   This plugin declares `engines.dsh` and ranges (`>=0.2.1-rc.2 <0.3.0-0`), which the same gate accepts
-   for future rc releases — so the `allow-version` exemption added earlier can be revoked:
+0.3.0 folds the model provider into this plugin, so an upgrade **removes the old package first and drops
+the `workbuddy` layer it used to own** — keeping both would register two providers under the same model
+names, duplicating or tangling the model list.
 
 ```powershell
-dsh plugin --profile desktop revoke-version "dsh-workbuddy-connect@0.7.8" --dsh-version 0.2.1-rc.3
+dsh plugin --profile desktop remove dsh-workbuddy-connect
+dsh plugin --profile desktop add "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git#v0.3.1" --config.strict-dep-builds=false
 ```
+
+If the old package was never installed, run only the second line. Its `llm-workbuddy` provider row
+disappears with it; this plugin's own row (`id: workbuddy-switcher`) carries the provider now, so put any
+provider configuration (`authFile`, probe port, …) under that id.
+
+If you granted the old package a version exemption, drop it:
+
+```powershell
+dsh plugin --profile desktop version-exemptions   # see whether anything is left
+```
+
+This plugin's peers and `engines.dsh` are ranges (`>=0.2.1-rc.2 <0.3.0-0`), so the compatibility gate no
+longer refuses it on a DSH upgrade and such exemptions have no use.
 
 ### Installing from local sources (while hacking on the plugin)
 
@@ -341,7 +343,7 @@ A bundle is roughly 2.4 KB per account (3 accounts ≈ 7 KB). Delete the file on
 
 ### Switching
 
-`dsh-workbuddy-connect` resolves credentials as "configured `authFile` → environment variable → platform default", and it re-reads `process.env` on **every** resolution. So a switch is just:
+The built-in model provider resolves credentials as "configured `authFile` → environment variable → platform default", and it re-reads `process.env` on **every** resolution. So a switch is just:
 
 ```js
 process.env.WORKBUDDY_AUTH_FILE = '/path/to/archive.json'
@@ -543,7 +545,7 @@ Archives hold **plaintext accessToken / refreshToken**.
 
 ### The model list did not change after switching
 
-`dsh-workbuddy-connect` polls credentials every 30 seconds. The plugin triggers a refresh itself, but if that fails, wait it out or click "Refresh models".
+The model provider polls credentials every 30 seconds. The plugin triggers a refresh itself, but if that fails, wait it out or click "Refresh models".
 
 ### The model group disappeared
 
@@ -571,31 +573,25 @@ If it never shows up:
 peers and `engines.dsh` are declared as ranges (`>=0.2.1-rc.2 <0.3.0-0`), which the gate accepts for
 future rc releases.
 
-On 0.2.x — where `dsh-workbuddy-connect` was a separate package — the old plugin pinned six DSH
-runtime packages to the **exact** versions it was built against, so the moment DSH was upgraded (say
-to `0.2.1-rc.3`) the gate refused it during composition: **every WorkBuddy model disappeared**.
-Reinstalling did not help — the newest release on npm, `0.7.9`, carries the same exact pins. It was a
-**declaration mismatch, not a real incompatibility**: comparing `0.2.1-rc.2` with `0.2.1-rc.3` file by
-file, the six packages differ **only in the version strings inside `package.json`; code and type
-declarations are byte-identical** (see
-[How the measurements were made](#how-the-measurements-were-made)).
+The 0.2.x generation was refused because the provider lived in a separate package that pinned six DSH
+runtime packages to the **exact** versions it was built against: the moment DSH was upgraded (say to
+`0.2.1-rc.3`) the gate refused it during composition and **every WorkBuddy model disappeared**.
+Comparing `0.2.1-rc.2` with `0.2.1-rc.3` file by file shows those six packages differ **only in the
+version strings inside `package.json`; code and type declarations are byte-identical** (see
+[How the measurements were made](#how-the-measurements-were-made)) — a declaration mismatch, not a real
+incompatibility.
 
-Two ways out, the first recommended:
+Upgrade to 0.3.0 as described in [Upgrading from 0.2.x](#upgrading-from-02x). If you must stay on
+0.2.x, DSH's own exact-version exemption clears the gate, at the cost of a fresh grant on every DSH
+upgrade:
 
 ```powershell
-# 1 (recommended): upgrade to 0.3.0 — the provider is bundled and declared as a range
-dsh plugin --profile desktop remove dsh-workbuddy-connect
-dsh plugin --profile desktop add "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git#v0.3.0"
-
-# 2 (temporary): keep the old package and exempt it with DSH's own mechanism
-dsh plugin --profile desktop allow-version "dsh-workbuddy-connect@0.7.8" --dsh-version "$(dsh --version)" --accept-risk
+dsh plugin --profile desktop allow-version "<package>@<version>" --dsh-version "$(dsh --version)" --accept-risk
 dsh plugin --profile desktop version-exemptions   # confirm
 ```
 
 The grant is written to `<profile>/compatibility.json` as `package@version -> allowed runtime
-versions`. It **survives restarts and plugin reinstalls**, but **every DSH upgrade needs a fresh
-grant** — by design, since the approval covers that one exact pair. Revoke it with `revoke-version`;
-after taking route 1 the grant is dead weight and can be removed.
+versions`. It **survives restarts and plugin reinstalls**; revoke it with `revoke-version`.
 
 ### Upstream answers 「请求被拦截，请重新发送」 (`400` / `code 11128`)
 
@@ -708,4 +704,10 @@ MIT. See [LICENSE](./LICENSE).
 
 ## Related
 
-- [`dsh-workbuddy-connect`](https://github.com/corrinehu/dsh-workbuddy-connect) — brings WorkBuddy models into DSH (required in practice)
+- [DeepSeek Harness](https://github.com/deepseek-ai) — the runtime this plugin runs on
+
+## Third-party code
+
+The model-provider half (`lib/bridge/`) comes from corrinehu's `dsh-workbuddy-connect`, MIT licensed and
+carried verbatim. The licence and the list of changes are in
+[THIRD_PARTY_NOTICES.txt](./THIRD_PARTY_NOTICES.txt).

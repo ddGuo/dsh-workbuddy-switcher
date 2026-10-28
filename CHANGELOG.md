@@ -10,6 +10,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Next release notes go here.
 
+## [0.3.1] - 2026-10-28
+
+### Changed
+
+- **Both READMEs rewritten for the single-package reality.** They still framed this plugin as a
+  companion to `dsh-workbuddy-connect` — a peer dependency, a separate install command, "must be
+  installed separately" — which stopped being true in 0.3.0. The intro, the install section, the
+  switching explanation and the troubleshooting entry now describe the bundled provider instead of a
+  second package.
+
+  Two kinds of mention remain on purpose: the `remove` command in the upgrade steps (an upgrade has to
+  delete the old package), and the attribution in the third-party section. The upgrade section also
+  now states the one thing an upgrading user needs that the docs never said: the old package's
+  `llm-workbuddy` provider row disappears with it, and provider configuration (`authFile`, probe port)
+  belongs under this plugin's own `workbuddy-switcher` row.
+
+  No code change, so the version only moves to track the documentation.
+
 ## [0.3.0] - 2026-10-28
 
 ### Changed
