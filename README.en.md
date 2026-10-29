@@ -210,34 +210,45 @@ check-in do not interfere**.
 Hand the line below to the Agent already running on this machine (this DSH session is enough): it installs the plugin if missing and updates it when it is not current.
 
 ```text
-Install the dsh-workbuddy-switcher plugin (https://github.com/ddGuo/dsh-workbuddy-switcher): install it if missing, update it if it is not the latest. When done, remind me to fully quit and relaunch DSH.
+Install the dsh-workbuddy-switcher plugin (npm package dsh-workbuddy-switcher, repository https://github.com/ddGuo/dsh-workbuddy-switcher): install it if missing, update it if it is not the latest. When done, remind me to fully quit and relaunch DSH.
 ```
 
-Or run the equivalent command yourself — **re-running it is the update**, pinned to the current release:
+That expands to the command below. **Re-running it is the upgrade:**
 
 ```powershell
-dsh plugin --profile desktop add "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git#v0.3.7" --config.strict-dep-builds=false
+dsh plugin --profile desktop add dsh-workbuddy-switcher --config.strict-dep-builds=false
 ```
 
-To follow the trunk instead (every `add` pulls the newest commit):
+Without a version it takes npm's `latest`. Pin one when you need to, e.g. `dsh-workbuddy-switcher@0.3.7`.
+
+> - **`--config.strict-dep-builds=false` is required**: pnpm 11 treats the ignored build scripts of
+>   `@google/genai` and `protobufjs` as a failure (`ERR_PNPM_IGNORED_BUILDS`) and the whole command exits.
+> - The registry name is `dsh-workbuddy-switcher` — unscoped, and *not* `dsh-workbuddy-connect`. The latter
+>   is the predecessor package that 0.3.0 folded in; installing it separately registers a second
+>   `workbuddy` provider.
+
+### Upgrading from an older release
+
+See what is installed first:
 
 ```powershell
-dsh plugin --profile desktop add "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git" --config.strict-dep-builds=false
+dsh plugin --profile desktop list --depth 0
 ```
 
-> - The `#v0.3.7` above is a **fixed release tag** and never drifts; drop it to follow the newest commit on `main`. Use tags for a settled install, `main` while developing.
-> - If this plugin is already installed from a `file:` path, this command switches it to the git source (the output shows a `- dsh-workbuddy-switcher` / `+ dsh-workbuddy-switcher <new version>` pair); to stay on your local checkout, use the local-source command below instead.
-> - Re-`add`ing the **same** `file:` path only prints `Already up to date` — edited sources are not copied over.
+Then pick the row that matches its source:
 
-### Upgrading from 0.2.x
+| Current source | Upgrade command |
+|---|---|
+| npm (`0.3.x`) | `dsh plugin --profile desktop add dsh-workbuddy-switcher --config.strict-dep-builds=false` |
+| git tag (`github:…#v0.3.x`) | the same; it switches to the npm source and prints a `- 0.3.6` / `+ 0.3.7` pair |
+| local `file:` | `remove` then `add` (see the next section) |
 
-0.3.0 folds the model provider into this plugin, so an upgrade **removes the old package first and drops
-the `workbuddy` layer it used to own** — keeping both would register two providers under the same model
-names, duplicating or tangling the model list.
+**Coming from 0.2.x costs one extra line.** 0.3.0 folded the model provider into this plugin, so the
+standalone package has to go — keeping it registers two providers under the same model names:
 
 ```powershell
 dsh plugin --profile desktop remove dsh-workbuddy-connect
-dsh plugin --profile desktop add "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git#v0.3.7" --config.strict-dep-builds=false
+dsh plugin --profile desktop add dsh-workbuddy-switcher --config.strict-dep-builds=false
 ```
 
 If the old package was never installed, run only the second line. Its `llm-workbuddy` provider row
@@ -250,8 +261,8 @@ If you granted the old package a version exemption, drop it:
 dsh plugin --profile desktop version-exemptions   # see whether anything is left
 ```
 
-This plugin's peers and `engines.dsh` are ranges (`>=0.2.1-rc.2 <0.3.0-0`), so the compatibility gate no
-longer refuses it on a DSH upgrade and such exemptions have no use.
+This plugin's peers and `engines.dsh` are ranges (`>=0.2.1-rc.2 <0.3.0-0`), so DSH upgrades no longer trip
+the compatibility gate and those exemptions have no further use.
 
 ### Installing from local sources (while hacking on the plugin)
 
@@ -259,7 +270,8 @@ longer refuses it on a DSH upgrade and such exemptions have no use.
 dsh plugin --profile desktop add "file:E:\dsh\dsh-workbuddy-switcher"
 ```
 
-> **Note**: a `file:` install **copies** rather than symlinks, and a repeated `add` is judged `Already up to date`. Either `remove` + `add`, or re-sync directly:
+> **Note**: a `file:` install **copies** rather than symlinks, and a repeated `add` is judged
+> `Already up-to-date`. Either `remove` + `add`, or re-sync directly:
 >
 > ```powershell
 > Copy-Item "E:\dsh\dsh-workbuddy-switcher\lib" `
@@ -267,7 +279,20 @@ dsh plugin --profile desktop add "file:E:\dsh\dsh-workbuddy-switcher"
 > ```
 >
 > After editing `lib/client.js` or `lib/bridge/client.js`, run `npm run build:client` to regenerate
-> `lib/client.bundle.js` — DSH only loads the assembled bundle.
+> `lib/client.bundle.js` — DSH loads only the built bundle.
+
+### Verifying the installed version
+
+```powershell
+# what is installed
+(Get-Content "$env:USERPROFILE\.dsh\profiles\desktop\node_modules\dsh-workbuddy-switcher\package.json" -Raw | ConvertFrom-Json).version
+
+# what npm publishes
+npm view dsh-workbuddy-switcher version
+```
+
+The UI says so too: the plugin settings page carries an update reminder that appears only when a newer
+release really exists, and its panel hands you the upgrade command to paste into an Agent.
 
 ### Restart
 

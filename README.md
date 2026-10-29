@@ -205,43 +205,52 @@ WorkBuddy 对**单个模型被限流**和**账号积分用尽**返回的是同�
 把下面这句交给本机已有的 Agent（这个 DSH 会话就够用）：没装就装，装了但不是最新版就更新。
 
 ```text
-安装 dsh-workbuddy-switcher 插件（https://github.com/ddGuo/dsh-workbuddy-switcher），本机没有就装，已有但不是最新版就更新。装完提醒我完全退出并重开 DSH。
+安装 dsh-workbuddy-switcher 插件（npm 包名 dsh-workbuddy-switcher，仓库 https://github.com/ddGuo/dsh-workbuddy-switcher），本机没有就装，已有但不是最新版就更新。装完提醒我完全退出并重开 DSH。
 ```
 
-自己跑也行，等价的一条命令（**重复执行即更新**，固定在当前发布的版本）：
+它背后跑的就是下面这一条。**重复执行即升级**：
 
 ```powershell
-dsh plugin --profile desktop add "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git#v0.3.7" --config.strict-dep-builds=false
+dsh plugin --profile desktop add dsh-workbuddy-switcher --config.strict-dep-builds=false
 ```
 
-想跟随主干（每次 `add` 都拉最新提交）：
+不写版本号时取 npm 的 `latest`。要钉死某个版本就写上，例如 `dsh-workbuddy-switcher@0.3.7`。
+
+> - **必须带 `--config.strict-dep-builds=false`**：pnpm 11 会把 `@google/genai`、`protobufjs` 的构建脚本被忽略当成失败（`ERR_PNPM_IGNORED_BUILDS`），整条命令随之退出。
+> - 这个包名在 npm 上是 `dsh-workbuddy-switcher`，**不要加 scope**，也不叫 `dsh-workbuddy-connect`——后者是 0.3.0 就并进来的前身包，单独装会出现两个 `workbuddy` provider。
+
+### 从旧版本升级
+
+先看当前装的是哪一版：
 
 ```powershell
-dsh plugin --profile desktop add "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git" --config.strict-dep-builds=false
+dsh plugin --profile desktop list --depth 0
 ```
 
-> - 上面的 `#v0.3.7` 是**固定的发布标签**，不会随时间漂移；去掉它就变成跟随 `main` 的最新提交。生产环境建议用标签，本地开发用 `main`。
-> - 已经是 `file:` 安装的，这条会顺手换成 git 来源（输出里会出现 `- dsh-workbuddy-switcher` / `+ dsh-workbuddy-switcher <新版本>` 这一对）；想继续用本地源码，改用下面「从本地源码装」那条。
-> - 对**同一个** `file:` 路径重复 `add`，pnpm 只会回 `Already up to date`，改过的源码不会同步过去。
+然后按来源选一条：
 
-### 从 0.2.x 升级
+| 当前来源 | 升级命令 |
+|---|---|
+| npm（`0.3.x`） | `dsh plugin --profile desktop add dsh-workbuddy-switcher --config.strict-dep-builds=false` |
+| git 标签（`github:…#v0.3.x`） | 同上；会换成 npm 来源，输出里出现 `- 0.3.6` / `+ 0.3.7` 这一对 |
+| 本地 `file:` | 先 `remove dsh-workbuddy-switcher` 再 `add`（见下节） |
 
-0.3.0 把模型提供者并进了本插件，所以升级时**先卸掉旧插件、并清掉它留下的 `workbuddy` 层**——留着会有两个 provider 抢同一个模型名，模型列表重复甚至打架。
+**从 0.2.x 上来还要多一步**：0.3.0 把模型提供者并进了本插件，旧的独立包必须卸掉，留着会有两个 provider 抢同一个模型名：
 
 ```powershell
 dsh plugin --profile desktop remove dsh-workbuddy-connect
-dsh plugin --profile desktop add "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git#v0.3.7" --config.strict-dep-builds=false
+dsh plugin --profile desktop add dsh-workbuddy-switcher --config.strict-dep-builds=false
 ```
 
-旧插件没装过就只跑第二条。它自带的 `llm-workbuddy` 提供者层随包一起消失，现在由本插件那一行（`id: workbuddy-switcher`）承载，所以要配置提供者（`authFile`、探针端口等）就写在那一行下面。
+旧包没装过就只跑第二条。它自带的 `llm-workbuddy` 提供者层随包消失，现在由本插件那一行（`id: workbuddy-switcher`）承载，所以要配置提供者（`authFile`、探针端口等）就写在那一行下面。
 
-如果之前给旧插件加过版本兼容豁免，顺手撤销：
+如果之前给旧包加过版本兼容豁免，顺手撤销：
 
 ```powershell
 dsh plugin --profile desktop version-exemptions   # 看还有没有
 ```
 
-本插件的 peer 与 `engines.dsh` 都写成了范围（`>=0.2.1-rc.2 <0.3.0-0`），DSH 升级不会再被兼容闸门拦住，所以这类豁免已经没用。
+本插件的 peer 与 `engines.dsh` 都写成了范围（`>=0.2.1-rc.2 <0.3.0-0`），DSH 升级不会再被兼容闸门拦住，这类豁免已经没用。
 
 ### 从本地源码装（改代码时用）
 
@@ -257,6 +266,18 @@ dsh plugin --profile desktop add "file:E:\dsh\dsh-workbuddy-switcher"
 > ```
 >
 > 改过 `lib/client.js` 或 `lib/bridge/client.js` 之后，先跑 `npm run build:client` 重新生成 `lib/client.bundle.js`——DSH 只会加载打包好的那一份。
+
+### 装完怎么确认版本
+
+```powershell
+# 装的版本
+(Get-Content "$env:USERPROFILE\.dsh\profiles\desktop\node_modules\dsh-workbuddy-switcher\package.json" -Raw | ConvertFrom-Json).version
+
+# npm 上的最新版
+npm view dsh-workbuddy-switcher version
+```
+
+界面里也有提示：插件设置页有更新提醒浮层，只在**确实有新版本**时出现，点开会给出升级命令（可直接复制给 Agent）。
 
 ### 重启
 
