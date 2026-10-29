@@ -225,7 +225,7 @@ second bare `add` is satisfied by it — pnpm considers the dependency met and *
 Measured: `add dsh-workbuddy-switcher` exited 0 and left 0.3.6 in place. Name the target version instead:
 
 ```powershell
-dsh plugin --profile desktop add "dsh-workbuddy-switcher@0.3.7" --config.strict-dep-builds=false
+dsh plugin --profile desktop add "dsh-workbuddy-switcher@0.3.8" --config.strict-dep-builds=false
 ```
 
 > - **`--config.strict-dep-builds=false` is required**: pnpm 11 treats the ignored build scripts of
@@ -247,7 +247,7 @@ Then pick the row that matches its source:
 | Current source | Upgrade command |
 |---|---|
 | npm (`0.3.x`) | `dsh plugin --profile desktop add "dsh-workbuddy-switcher@<target version>" --config.strict-dep-builds=false` (the version is mandatory — see above) |
-| git tag (`github:…#v0.3.x`) | the same; it switches to the npm source and prints a `- 0.3.6` / `+ 0.3.7` pair |
+| git tag (`github:…#v0.3.x`) | the same; it switches to the npm source and prints a `- 0.3.6` / `+ 0.3.8` pair |
 | local `file:` | `remove` then `add` (see the next section) |
 
 **Coming from 0.2.x costs one extra line.** 0.3.0 folded the model provider into this plugin, so the

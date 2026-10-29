@@ -217,7 +217,7 @@ dsh plugin --profile desktop add dsh-workbuddy-switcher --config.strict-dep-buil
 **升级必须写版本号。** 第一次安装可以不写（取 npm 的 `latest`），但只要已经装过，profile 里记的就是一个精确版本（`"dsh-workbuddy-switcher": "0.3.6"`），再跑一次不带版本号的 `add` 会被 pnpm 判为已经满足、**不会升级**——实测：`add dsh-workbuddy-switcher` 返回 0，装的还是 0.3.6。所以要升级就明确写上目标版本：
 
 ```powershell
-dsh plugin --profile desktop add "dsh-workbuddy-switcher@0.3.7" --config.strict-dep-builds=false
+dsh plugin --profile desktop add "dsh-workbuddy-switcher@0.3.8" --config.strict-dep-builds=false
 ```
 
 > - **必须带 `--config.strict-dep-builds=false`**：pnpm 11 会把 `@google/genai`、`protobufjs` 的构建脚本被忽略当成失败（`ERR_PNPM_IGNORED_BUILDS`），整条命令随之退出。
@@ -236,7 +236,7 @@ dsh plugin --profile desktop list --depth 0
 | 当前来源 | 升级命令 |
 |---|---|
 | npm（`0.3.x`） | `dsh plugin --profile desktop add "dsh-workbuddy-switcher@<目标版本>" --config.strict-dep-builds=false`（**必须写版本**，见上） |
-| git 标签（`github:…#v0.3.x`） | 同上；会换成 npm 来源，输出里出现 `- 0.3.6` / `+ 0.3.7` 这一对 |
+| git 标签（`github:…#v0.3.x`） | 同上；会换成 npm 来源，输出里出现 `- 0.3.6` / `+ 0.3.8` 这一对 |
 | 本地 `file:` | 先 `remove dsh-workbuddy-switcher` 再 `add`（见下节） |
 
 **从 0.2.x 上来还要多一步**：0.3.0 把模型提供者并进了本插件，旧的独立包必须卸掉，留着会有两个 provider 抢同一个模型名：

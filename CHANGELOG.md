@@ -4,6 +4,27 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.8] - 2026-10-29
+
+### Documentation
+
+- **The install section leads with the npm source, and states what an upgrade actually needs.**
+  The package is on the registry now, so the primary command is
+  `dsh plugin --profile desktop add "dsh-workbuddy-switcher@<target version>"`; a git tag stays
+  documented for pinning to a release.
+
+  The previous text claimed `add dsh-workbuddy-switcher` without a version re-runs as the upgrade.
+  Measured on 0.3.6 -> 0.3.7: it exits 0 and leaves 0.3.6 installed, because the profile records an
+  exact version (`"0.3.6"`) that pnpm considers satisfied. The upgrade form now names the version in
+  the main section, the source table and the 0.2.x recipe alike.
+
+  Also called out: `--config.strict-dep-builds=false` is required (pnpm 11 otherwise fails the run
+  with `ERR_PNPM_IGNORED_BUILDS`), the package name is unscoped and is not `dsh-workbuddy-connect`,
+  and two snippets verify the installed and the published version.
+
+  Documentation only: no source file changed, so this release exists to put the corrected README on
+  the npm page.
+
 ## [Unreleased]
 
 ### Changed
