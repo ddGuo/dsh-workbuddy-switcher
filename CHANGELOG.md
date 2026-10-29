@@ -10,6 +10,47 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Next release notes go here.
 
+## [0.3.7] - 2026-10-29
+
+### Fixed
+
+- **The update reminder pointed at the package 0.3.0 deleted.** The vendored
+  bridge brought its own update checker, which queries npm for
+  `dsh-workbuddy-connect` and compares the answer with a compiled-in `0.7.8`.
+  After the merge that package no longer exists as a dependency, so the check
+  read the live `latest` (`0.7.9`), concluded an upgrade was available, and its
+  accept button would have reinstalled the standalone package — registering a
+  second `workbuddy` provider beside this one, which is exactly the conflict the
+  merge removed.
+
+  Measured before the fix: `dsh-workbuddy-connect` `latest` = `0.7.9`,
+  `dsh-workbuddy-switcher` `latest` = `0.3.6`, baseline constant `0.7.8` — so the
+  reminder fired permanently and named the wrong package. After the fix the same
+  comparison resolves to `up-to-date` while the installed version equals
+  `latest`, and to `update-available` one release behind (verified on both
+  against the live registry).
+
+  Changes:
+
+  - the metadata URL and the release-list repository now name
+    `dsh-workbuddy-switcher` / `ddGuo/dsh-workbuddy-switcher`;
+  - the baseline is read from this package's manifest by `pluginVersion()`,
+    which walks up from `lib/bridge/` to the nearest manifest whose `name`
+    matches — a hardcoded number cannot track a package versioned as a whole.
+    The old constant survives only as a fallback for an unreadable manifest;
+  - the reminder's label and the copy-for-agent prompt name this plugin in both
+    locales, so following the prompt installs a package that exists;
+  - the served HTTP route paths (`/plugins/dsh-workbuddy-connect/update` and
+    friends) deliberately keep their historical spelling: they are the contract
+    between a host and a browser half that may be mid-upgrade, and renaming them
+    would break a running pair.
+
+### Tests
+
+- `test/update-target.test.js` pins all four targets, the manifest-baseline
+  wiring, both locale labels (and that the shipped bundle carries them), the
+  recovery prompt's package name, and the deliberate survival of the wire paths.
+
 ## [0.3.6] - 2026-10-29
 
 ### Fixed
