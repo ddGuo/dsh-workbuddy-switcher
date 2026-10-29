@@ -213,13 +213,20 @@ Hand the line below to the Agent already running on this machine (this DSH sessi
 Install the dsh-workbuddy-switcher plugin (npm package dsh-workbuddy-switcher, repository https://github.com/ddGuo/dsh-workbuddy-switcher): install it if missing, update it if it is not the latest. When done, remind me to fully quit and relaunch DSH.
 ```
 
-That expands to the command below. **Re-running it is the upgrade:**
+That expands to the command below. **First install** uses it as-is; an upgrade names the version (see below):
 
 ```powershell
 dsh plugin --profile desktop add dsh-workbuddy-switcher --config.strict-dep-builds=false
 ```
 
-Without a version it takes npm's `latest`. Pin one when you need to, e.g. `dsh-workbuddy-switcher@0.3.7`.
+**An upgrade has to name the version.** The first install may omit it (npm's `latest`), but once
+anything is installed the profile records an exact version (`"dsh-workbuddy-switcher": "0.3.6"`), and a
+second bare `add` is satisfied by it — pnpm considers the dependency met and **does not upgrade**.
+Measured: `add dsh-workbuddy-switcher` exited 0 and left 0.3.6 in place. Name the target version instead:
+
+```powershell
+dsh plugin --profile desktop add "dsh-workbuddy-switcher@0.3.7" --config.strict-dep-builds=false
+```
 
 > - **`--config.strict-dep-builds=false` is required**: pnpm 11 treats the ignored build scripts of
 >   `@google/genai` and `protobufjs` as a failure (`ERR_PNPM_IGNORED_BUILDS`) and the whole command exits.
@@ -239,7 +246,7 @@ Then pick the row that matches its source:
 
 | Current source | Upgrade command |
 |---|---|
-| npm (`0.3.x`) | `dsh plugin --profile desktop add dsh-workbuddy-switcher --config.strict-dep-builds=false` |
+| npm (`0.3.x`) | `dsh plugin --profile desktop add "dsh-workbuddy-switcher@<target version>" --config.strict-dep-builds=false` (the version is mandatory — see above) |
 | git tag (`github:…#v0.3.x`) | the same; it switches to the npm source and prints a `- 0.3.6` / `+ 0.3.7` pair |
 | local `file:` | `remove` then `add` (see the next section) |
 
@@ -248,7 +255,7 @@ standalone package has to go — keeping it registers two providers under the sa
 
 ```powershell
 dsh plugin --profile desktop remove dsh-workbuddy-connect
-dsh plugin --profile desktop add dsh-workbuddy-switcher --config.strict-dep-builds=false
+dsh plugin --profile desktop add "dsh-workbuddy-switcher@<target version>" --config.strict-dep-builds=false
 ```
 
 If the old package was never installed, run only the second line. Its `llm-workbuddy` provider row

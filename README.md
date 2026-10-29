@@ -208,13 +208,17 @@ WorkBuddy 对**单个模型被限流**和**账号积分用尽**返回的是同�
 安装 dsh-workbuddy-switcher 插件（npm 包名 dsh-workbuddy-switcher，仓库 https://github.com/ddGuo/dsh-workbuddy-switcher），本机没有就装，已有但不是最新版就更新。装完提醒我完全退出并重开 DSH。
 ```
 
-它背后跑的就是下面这一条。**重复执行即升级**：
+它背后跑的就是下面这一条。**首次安装**用它；升级要写版本号（原因见下）：
 
 ```powershell
 dsh plugin --profile desktop add dsh-workbuddy-switcher --config.strict-dep-builds=false
 ```
 
-不写版本号时取 npm 的 `latest`。要钉死某个版本就写上，例如 `dsh-workbuddy-switcher@0.3.7`。
+**升级必须写版本号。** 第一次安装可以不写（取 npm 的 `latest`），但只要已经装过，profile 里记的就是一个精确版本（`"dsh-workbuddy-switcher": "0.3.6"`），再跑一次不带版本号的 `add` 会被 pnpm 判为已经满足、**不会升级**——实测：`add dsh-workbuddy-switcher` 返回 0，装的还是 0.3.6。所以要升级就明确写上目标版本：
+
+```powershell
+dsh plugin --profile desktop add "dsh-workbuddy-switcher@0.3.7" --config.strict-dep-builds=false
+```
 
 > - **必须带 `--config.strict-dep-builds=false`**：pnpm 11 会把 `@google/genai`、`protobufjs` 的构建脚本被忽略当成失败（`ERR_PNPM_IGNORED_BUILDS`），整条命令随之退出。
 > - 这个包名在 npm 上是 `dsh-workbuddy-switcher`，**不要加 scope**，也不叫 `dsh-workbuddy-connect`——后者是 0.3.0 就并进来的前身包，单独装会出现两个 `workbuddy` provider。
@@ -231,7 +235,7 @@ dsh plugin --profile desktop list --depth 0
 
 | 当前来源 | 升级命令 |
 |---|---|
-| npm（`0.3.x`） | `dsh plugin --profile desktop add dsh-workbuddy-switcher --config.strict-dep-builds=false` |
+| npm（`0.3.x`） | `dsh plugin --profile desktop add "dsh-workbuddy-switcher@<目标版本>" --config.strict-dep-builds=false`（**必须写版本**，见上） |
 | git 标签（`github:…#v0.3.x`） | 同上；会换成 npm 来源，输出里出现 `- 0.3.6` / `+ 0.3.7` 这一对 |
 | 本地 `file:` | 先 `remove dsh-workbuddy-switcher` 再 `add`（见下节） |
 
@@ -239,7 +243,7 @@ dsh plugin --profile desktop list --depth 0
 
 ```powershell
 dsh plugin --profile desktop remove dsh-workbuddy-connect
-dsh plugin --profile desktop add dsh-workbuddy-switcher --config.strict-dep-builds=false
+dsh plugin --profile desktop add "dsh-workbuddy-switcher@<目标版本>" --config.strict-dep-builds=false
 ```
 
 旧包没装过就只跑第二条。它自带的 `llm-workbuddy` 提供者层随包消失，现在由本插件那一行（`id: workbuddy-switcher`）承载，所以要配置提供者（`authFile`、探针端口等）就写在那一行下面。
