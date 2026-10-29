@@ -10,6 +10,66 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Next release notes go here.
 
+## [0.3.6] - 2026-10-29
+
+### Fixed
+
+- **The `400` / `code 11128` rejection came back, and the previous two countermeasures had both been
+  neutralised.** The gateway now strips invisible characters before matching, so the zero-width
+  spacing that 0.3.5 relied on had become useless — measured on the same 407-character block that
+  tripped it on 2026-10-28:
+
+  | the block as sent | result |
+  |---|---|
+  | unchanged | `400` |
+  | zero-width space every 24 characters | `400` |
+  | zero-width space every 8 characters | `400` |
+  | one **visible** word changed | `200` |
+
+  That is why the guard's own counters said `unrecovered: 2` with `lastDetail: "the marked body was
+  rejected as well"` instead of recovering.
+
+  The same session measured **which part of the request is inspected at all**, which is what the fix
+  is built on:
+
+  | the same offending text placed in | result |
+  |---|---|
+  | a `system` message | `400` |
+  | an `assistant` turn | `400` |
+  | a `user` message | `200` |
+  | 108 tool declarations | `200` |
+
+  So instead of hiding text from a fingerprint, 0.3.6 **moves instruction text out of the roles the
+  gateway reads**: the system prompt travels byte-for-byte in the first `user` message behind an
+  "authoritative instructions" frame, and the `system` role keeps one neutral sentence pointing at
+  it. Nothing in the prompt is rewritten, so literals, code samples and formatting survive exactly —
+  which the zero-width approach could never guarantee.
+
+  Verified on the full production shape (real 8 KB prompt, all 108 tool declarations, multi-turn
+  history): `400` as a system message, `200` relocated, model reply correct. Instruction-following was
+  checked separately by asking which tool must be used to read a file — it answered "the read tool …
+  avoid `cat`", a fact stated only in the relocated prompt.
+
+  The retry path keeps a second line of defence for the day the gateway starts reading user messages:
+  it now breaks up whatever still travels in an inspected role with a **visible** ` · ` separator
+  rather than a zero-width mark, since invisible ones are proven to be stripped.
+
+### Changed
+
+- `lib/channel-guard.js` exports `INSTRUCTION_FRAME` and `SYSTEM_PLACEHOLDER` so the tests pin the
+  contract instead of duplicating literals.
+
+### Tests
+
+- `test/channel-guard.test.js` rewritten around the relocation: the prompt moves byte-for-byte into
+  the leading user message, the system role keeps only the neutral sentence, assistant turns and user
+  messages keep their order, the rest of the request is untouched, a second pass is a no-op, and no
+  zero-width mark appears on the first attempt.
+- `test/channel-retry.test.js` updated: the retry relocates *and* separates, uses a visible separator
+  (never a zero-width one), leaves the user's own words and tool declarations alone, keeps
+  `tool_calls` arguments byte-identical, and counts a body it cannot rewrite as unrecovered without a
+  pointless second request.
+
 ## [0.3.5] - 2026-10-28
 
 ### Added

@@ -2,7 +2,7 @@
   "name": "dsh-workbuddy-switcher",
   "displayName": "DSH WorkBuddy Switcher",
   "description": "Bring WorkBuddy desktop app models into DeepSeek Harness with one install — manage a local pool of accounts, switch between them, and rotate automatically when an account runs out of quota.",
-  "version": "0.3.5",
+  "version": "0.3.6",
   "author": "guoding",
   "contributors": [
     "corrinehu (dsh-workbuddy-connect, vendored under lib/bridge)"

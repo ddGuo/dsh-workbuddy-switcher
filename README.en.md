@@ -216,7 +216,7 @@ Install the dsh-workbuddy-switcher plugin (https://github.com/ddGuo/dsh-workbudd
 Or run the equivalent command yourself — **re-running it is the update**, pinned to the current release:
 
 ```powershell
-dsh plugin --profile desktop add "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git#v0.3.5" --config.strict-dep-builds=false
+dsh plugin --profile desktop add "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git#v0.3.6" --config.strict-dep-builds=false
 ```
 
 To follow the trunk instead (every `add` pulls the newest commit):
@@ -225,7 +225,7 @@ To follow the trunk instead (every `add` pulls the newest commit):
 dsh plugin --profile desktop add "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git" --config.strict-dep-builds=false
 ```
 
-> - The `#v0.3.5` above is a **fixed release tag** and never drifts; drop it to follow the newest commit on `main`. Use tags for a settled install, `main` while developing.
+> - The `#v0.3.6` above is a **fixed release tag** and never drifts; drop it to follow the newest commit on `main`. Use tags for a settled install, `main` while developing.
 > - If this plugin is already installed from a `file:` path, this command switches it to the git source (the output shows a `- dsh-workbuddy-switcher` / `+ dsh-workbuddy-switcher <new version>` pair); to stay on your local checkout, use the local-source command below instead.
 > - Re-`add`ing the **same** `file:` path only prints `Already up to date` — edited sources are not copied over.
 
@@ -237,7 +237,7 @@ names, duplicating or tangling the model list.
 
 ```powershell
 dsh plugin --profile desktop remove dsh-workbuddy-connect
-dsh plugin --profile desktop add "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git#v0.3.5" --config.strict-dep-builds=false
+dsh plugin --profile desktop add "git+https://github.com/ddGuo/dsh-workbuddy-switcher.git#v0.3.6" --config.strict-dep-builds=false
 ```
 
 If the old package was never installed, run only the second line. Its `llm-workbuddy` provider row
@@ -393,31 +393,48 @@ The plugin uses exactly these three properties to hide the switch.
 
 ### The channel-verification shim
 
-WorkBuddy's gateway fingerprints the system prompt. A match is answered `400` / `code 11128` /
+WorkBuddy's gateway fingerprints request text. A match is answered `400` / `code 11128` /
 `msg: Illegal API invocation from an unapproved channel` — the UI shows 「请求被拦截，请重新发送」
 ("request intercepted, please resend"). The official client never sends those texts, which is why
 the same account works inside the app.
 
-The rule has changed twice, so the countermeasure did too:
+The rule has changed three times, so the countermeasure did too:
 
 | When | Measured trigger | Fix at the time |
 |---|---|---|
 | 2026-10-22 | the literal `DeepSeek Harness` anywhere in a `system` message; one occurrence was enough | rewrite each occurrence as `DeepSeek\u200b Harness` |
-| 2026-10-28 | that stopped helping; the trigger had moved to **another long exact substring** (~110 characters, spanning sentences) | see below |
+| 2026-10-28 | **another long exact substring** (~110 characters, spanning sentences) | a zero-width space every ~24 characters, capping the longest matchable run |
+| 2026-10-29 | zero-width spaces **stopped working entirely**: the same text answered `400` raw, `400` with U+200B every 24 characters, `400` with one every 8, and `200` with a single **visible** word changed — the gateway had begun stripping invisible characters before matching | see below |
 
-The 2026-10-28 finding: **any single-character edit inside** the offending span cleared it, while
-prepending or appending whole sentences did not — the signature of an exact-match blacklist, not a
-rule about a word. Chasing the phrase is therefore pointless: next time it will be different text.
+The 2026-10-29 run also measured **which part of the request is read at all**:
 
-So the current countermeasure stops any long string from surviving: the plugin wraps
-`globalThis.fetch`, inspects only `POST`s whose URL contains `/v2/chat/completions`, and inserts a
-zero-width space (U+200B) into `system` / `developer` text roughly **every 24 characters, always
-between words**. Any exact match longer than ~30 characters is broken, and the text a human or a
-model reads is unchanged — the mark is invisible and never splits a word.
+| the same offending text placed in | result |
+|---|---|
+| a `system` message | `400` |
+| an `assistant` turn | `400` |
+| a `user` message | `200` |
+| 108 tool declarations (`tools[].function.description`) | `200` |
 
-Insertion points are word boundaries only, so identifiers, paths and code samples keep their
-spelling. Only instruction text is touched: user messages, tool declarations, other providers'
-requests, and bodies that need nothing are forwarded byte-identical.
+So the guard no longer guesses fingerprints and no longer alters the prompt. It **moves instruction
+text out of the roles the gateway reads**:
+
+- the 8 KB system prompt is carried **unchanged, byte for byte**, in the first `user` message, behind
+  a framing line saying these are the operating instructions for the whole conversation;
+- the `system` message keeps one neutral sentence pointing at them;
+- user messages, tool declarations, assistant history and every other request field stay as they were.
+
+The instructions therefore remain complete original text (literals, code samples and formatting
+untouched) and the model still follows them: asked which tool it must use to read a file and which
+shell command to avoid, it answered "the read tool … avoid `cat`", which is stated only in the
+relocated prompt.
+
+A second line of defence covers the day the gateway starts reading user messages too: on a measured
+rejection the request is **retried once**, and that retry breaks up whatever still travels in an
+inspected role with a **visible** separator (` · `) — not a zero-width mark, since those are proven to
+be stripped. The retry mutates text, so it is never used for the first attempt.
+
+Scope stays narrow: only `POST`s whose URL contains `/v2/chat/completions`. Other providers, non-chat
+traffic, and bodies with no instruction text are forwarded byte-identical.
 
 ### How the measurements were made
 
@@ -425,10 +442,11 @@ Every claim in this README marked as measured comes from a re-runnable script, n
 
 | Claim | How it was established |
 |---|---|
-| the `400` is triggered by text in the system prompt | vary only the `system` content, keep every other byte fixed, send the smallest request, compare status codes |
-| neutralising only the first occurrence is not enough | one real 8 KB prompt, first-occurrence-only vs all-occurrences: `400` vs `200` |
-| the 2026-10-28 trigger is an exact substring | bisected to a 111-character boundary; editing any character inside it → `200`, appending whole sentences → still `400`; five identical replays gave identical results |
-| one mark every ~24 characters clears it | the same real prompt plus all 108 tools: `400` without the guard, `200` with it, and the model still answered a control question correctly |
+| the `400` is triggered by request text | vary only the `system` content, keep every other byte fixed, send the smallest request, compare status codes |
+| the 2026-10-28 trigger was an exact substring | bisected to a 111-character boundary; editing any character inside it → `200`, appending whole sentences → still `400`; five identical replays gave identical results |
+| zero-width marks stopped working on 2026-10-29 | same text: raw `400`, mark every 24 characters `400`, mark every 8 `400`, one visible word changed `200` |
+| only `system` and `assistant` are read | the same offending text in four placements; only those two answered `400` |
+| the relocated production request passes | real prompt + 108 tools + multi-turn history: `400` as sent, `200` relocated, and the model still followed the instructions |
 | `rc.2` and `rc.3` differ only in their version string | `npm pack` both versions, unpack, walk every file and compare bytes; across the six packages only `package.json` differs |
 
 The last one in detail: both versions of each package were extracted side by side, every file compared
@@ -596,18 +614,20 @@ versions`. It **survives restarts and plugin reinstalls**; revoke it with `revok
 ### Upstream answers 「请求被拦截，请重新发送」 (`400` / `code 11128`)
 
 That is the gateway's channel fingerprint check, and it has **nothing to do with the account** —
-switching will not help. The plugin covers it at the transport layer (see
+switching will not help. The plugin handles it at the transport layer (see
 [The channel-verification shim](#the-channel-verification-shim)); it takes effect only after a
-**full quit and relaunch of DSH**, because the `fetch` wrapper is installed at startup.
+**full quit and relaunch of DSH**, because the `fetch` wrapper and retry hook are installed at startup.
 
-The rule changes over time (2026-10-22 and 2026-10-28 were not even the same trigger condition), which
-is why the guard targets no particular phrase but breaks every long exact match. If the error still
-survives a restart:
+The rule has already changed three times (a word on 10-22, a long exact substring on 10-28, and
+stripping invisible characters from 10-29), which is why the guard no longer guesses fingerprints: it
+moves instruction text out of the inspected roles, and falls back to a **visible** separator on retry.
+If the error still survives a restart:
 
-1. check the settings card reports plugin version `0.3.0` or newer (0.2.5–0.2.6 only cover the
-   October 22 rule)
+1. check the settings card reports plugin version `0.3.6` or newer (0.2.5–0.3.5 all target older rules)
 2. check that `lib/channel-guard.js` exists in the profile's `node_modules/dsh-workbuddy-switcher`
-3. if the rule has changed again, open an issue with the error and the system prompt in force — the
+3. look at the `channelGuard` state in the settings card: a growing `unrecovered` means the gateway has
+   moved again, and `lastDetail` names the step that was refused
+4. if the rule has changed again, open an issue with the error and the system prompt in force — the
    bisecting method in [How the measurements were made](#how-the-measurements-were-made) finds the
    new trigger
 

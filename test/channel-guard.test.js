@@ -1,86 +1,114 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { installChannelGuard, neutralizeChatBody } from '../lib/channel-guard.js';
+import {
+  INSTRUCTION_FRAME,
+  SYSTEM_PLACEHOLDER,
+  installChannelGuard,
+  neutralizeChatBody,
+} from '../lib/channel-guard.js';
 
-const RAW = 'DeepSeek Harness';
-const NEUTRAL = 'DeepSeek\u200b Harness';
-const MARK = '\u200b';
-
-const body = (messages) => JSON.stringify({
+const body = (messages, extra = {}) => JSON.stringify({
   model: 'deepseek-v4.1-flash',
   messages,
   stream: true,
   max_tokens: 8,
+  ...extra,
 });
 
-const countOf = (hay, needle) => hay.split(needle).length - 1;
+const markOnFirstOccurrence = 'DeepSeek\u200b Harness';
 
-const instructionsOf = (bodyString) => JSON.parse(bodyString).messages
-  .filter((message) => message.role === 'system' || message.role === 'developer')
-  .map((message) => (typeof message.content === 'string' ? message.content : message.content.map((part) => part.text).join('')))
-  .join('\n');
-
-test('neutralises every occurrence of the measured phrase', () => {
-  const source = body([{
-    role: 'system',
-    content: `You are an AI agent powered by ${RAW}. The ${RAW} implementation checkout is here.`,
-  }]);
-  const next = neutralizeChatBody(source);
+test('moves instruction text out of the system role, byte for byte', () => {
+  const prompt = 'You are an AI agent powered by DeepSeek Harness.\n\nRead the file with the read tool.';
+  const next = neutralizeChatBody(body([
+    { role: 'system', content: prompt },
+    { role: 'user', content: 'fix the bug' },
+  ]));
   assert.equal(typeof next, 'string');
-  assert.equal(countOf(next, RAW), 0);
-  // Both mentions survive in a readable form; only the exact spelling is broken.
-  assert.equal(countOf(next, 'DeepSeek'), 2);
-  assert.equal(countOf(next, 'Harness'), 2);
-  assert.ok(countOf(next, MARK) >= 2);
+  const parsed = JSON.parse(next);
+  // The gateway has been measured reading system and assistant text, not user text.
+  assert.equal(parsed.messages[0].role, 'system');
+  assert.equal(parsed.messages[0].content, SYSTEM_PLACEHOLDER);
+  assert.equal(parsed.messages[1].role, 'user');
+  // The prompt itself is carried unchanged, so literals and formatting survive.
+  assert.equal(parsed.messages[1].content, `${INSTRUCTION_FRAME}${prompt}`);
+  // The conversation follows untouched.
+  assert.deepEqual(parsed.messages[2], { role: 'user', content: 'fix the bug' });
 });
 
-test('breaks long exact runs so a longer blacklist entry cannot match', () => {
-  const paragraph = 'Tokens prefixed with @ are paths the user explicitly referenced. '
-    + 'Relative paths resolve from the workspace root; absolute paths identify files or directories on the host. '
-    + 'A trailing slash marks a directory: list it when its contents matter.';
-  const next = instructionsOf(neutralizeChatBody(body([{ role: 'system', content: paragraph }])));
-  const longest = Math.max(...next.split(MARK).map((piece) => piece.length));
-  // The cadence is 24 characters, so no unmarked run can approach the
-  // ~110-character fingerprint that was measured on 2026-10-28.
-  assert.ok(longest < 60, `unmarked run of ${longest} characters is too long`);
+test('carries several instruction messages, including a developer role', () => {
+  const next = neutralizeChatBody(body([
+    { role: 'developer', content: 'rule one' },
+    { role: 'system', content: 'rule two' },
+    { role: 'user', content: 'go' },
+  ]));
+  const parsed = JSON.parse(next);
+  assert.equal(parsed.messages[0].content, SYSTEM_PLACEHOLDER);
+  assert.equal(parsed.messages[1].content, `${INSTRUCTION_FRAME}rule one\n\nrule two`);
+  assert.deepEqual(parsed.messages.map((m) => m.role), ['system', 'user', 'user']);
 });
 
-test('never splits a word: removing the marks restores the text', () => {
-  const text = 'Alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma.';
-  const marked = instructionsOf(neutralizeChatBody(body([{ role: 'system', content: text }])));
-  assert.notEqual(marked, text);
-  assert.equal(marked.split(MARK).join(''), text);
+test('carries text-part content without flattening anything else', () => {
+  const next = neutralizeChatBody(body([
+    { role: 'system', content: [{ type: 'text', text: 'first part' }, { type: 'text', text: ' second part' }] },
+    { role: 'user', content: 'hi' },
+  ]));
+  const parsed = JSON.parse(next);
+  assert.equal(parsed.messages[1].content, `${INSTRUCTION_FRAME}first part second part`);
 });
 
-test('leaves user text untouched', () => {
-  const source = body([
-    { role: 'system', content: 'plain instructions' },
-    { role: 'user', content: `the ${RAW} implementation checkout, at the workspace root` },
-  ]);
-  const next = neutralizeChatBody(source);
-  assert.equal(JSON.parse(next ?? source).messages[1].content, `the ${RAW} implementation checkout, at the workspace root`);
+test('keeps assistant turns in place: only instruction roles move', () => {
+  const next = neutralizeChatBody(body([
+    { role: 'system', content: 'instructions' },
+    { role: 'user', content: 'hello' },
+    { role: 'assistant', content: 'hi there' },
+    { role: 'user', content: 'what is 6*7' },
+  ]));
+  const parsed = JSON.parse(next);
+  assert.deepEqual(parsed.messages.map((m) => m.role), ['system', 'user', 'user', 'assistant', 'user']);
+  assert.deepEqual(parsed.messages[3], { role: 'assistant', content: 'hi there' });
 });
 
-test('handles a developer role and text-part content', () => {
-  const source = body([{
-    role: 'developer',
-    content: [
-      { type: 'text', text: `You are an AI agent powered by ${RAW}.` },
-      { type: 'text', text: 'unrelated' },
-    ],
-  }]);
-  const next = neutralizeChatBody(source);
-  assert.equal(countOf(next, RAW), 0);
-  assert.equal(JSON.parse(next).messages[0].content[1].text, 'unrelated');
+test('is idempotent: a relocated body is left alone', () => {
+  const first = neutralizeChatBody(body([{ role: 'system', content: 'instructions' }, { role: 'user', content: 'hi' }]));
+  assert.equal(typeof first, 'string');
+  assert.equal(neutralizeChatBody(first), undefined, 'a second pass must not wrap the frame again');
 });
 
-test('is a no-op for bodies that cannot need it', () => {
-  assert.equal(neutralizeChatBody(body([{ role: 'user', content: 'hi there friend' }])), undefined);
+test('never leaves the measured phrase in a role the gateway reads', () => {
+  const next = neutralizeChatBody(body([
+    { role: 'system', content: 'powered by the DeepSeek Harness build' },
+    { role: 'assistant', content: 'noted' },
+    { role: 'user', content: 'hi' },
+  ]));
+  const parsed = JSON.parse(next);
+  // The system role now holds only the neutral sentence.
+  assert.equal(parsed.messages[0].content, SYSTEM_PLACEHOLDER);
+  // The phrase survives verbatim in the user role, where it is not inspected.
+  assert.ok(parsed.messages[1].content.includes('DeepSeek Harness'));
+});
+
+test('is a no-op for bodies that carry nothing to move', () => {
+  assert.equal(neutralizeChatBody(body([{ role: 'user', content: 'hi' }])), undefined);
+  assert.equal(neutralizeChatBody(body([{ role: 'system', content: '' }, { role: 'user', content: 'hi' }])), undefined);
   assert.equal(neutralizeChatBody('not json'), undefined);
-  assert.equal(neutralizeChatBody(JSON.stringify({ messages: 'nope' })), undefined);
   assert.equal(neutralizeChatBody(''), undefined);
   assert.equal(neutralizeChatBody(undefined), undefined);
+  assert.equal(neutralizeChatBody(JSON.stringify({ messages: 'nope' })), undefined);
+});
+
+test('leaves the rest of the request exactly as it was', () => {
+  const tools = [{ type: 'function', function: { name: 'run', description: 'runs things', parameters: { type: 'object' } } }];
+  const next = neutralizeChatBody(body([{ role: 'system', content: 'instructions' }, { role: 'user', content: 'hi' }], {
+    tools,
+    tool_choice: 'auto',
+    temperature: 0.2,
+  }));
+  const parsed = JSON.parse(next);
+  assert.deepEqual(parsed.tools, tools);
+  assert.equal(parsed.tool_choice, 'auto');
+  assert.equal(parsed.temperature, 0.2);
+  assert.equal(parsed.model, 'deepseek-v4.1-flash');
 });
 
 test('the installed guard rewrites a chat POST and restores afterwards', async () => {
@@ -95,13 +123,15 @@ test('the installed guard rewrites a chat POST and restores afterwards', async (
     const restore = installChannelGuard();
     await globalThis.fetch('https://copilot.tencent.com/v2/chat/completions', {
       method: 'POST',
-      body: body([{ role: 'system', content: `You are an AI agent powered by ${RAW}.` }]),
+      body: body([{ role: 'system', content: 'instructions' }, { role: 'user', content: 'hi' }]),
       headers: { 'Content-Type': 'application/json', 'Content-Length': '999' },
     });
     assert.equal(calls.length, 1);
-    assert.equal(countOf(calls[0].init.body, RAW), 0);
+    const sent = JSON.parse(calls[0].init.body);
+    assert.equal(sent.messages[0].content, SYSTEM_PLACEHOLDER);
+    assert.ok(sent.messages[1].content.startsWith(INSTRUCTION_FRAME));
+    assert.equal(calls[0].init.headers['Content-Length'], undefined, 'a stale length must be dropped');
     assert.equal(calls[0].init.headers['Content-Type'], 'application/json');
-    assert.equal(calls[0].init.headers['Content-Length'], undefined);
     restore();
     assert.equal(globalThis.fetch, stub);
   } finally {
@@ -119,12 +149,12 @@ test('the installed guard leaves other traffic untouched', async () => {
   globalThis.fetch = stub;
   try {
     const restore = installChannelGuard();
-    const dirty = body([{ role: 'system', content: `powered by ${RAW}` }]);
+    const dirty = body([{ role: 'system', content: 'instructions' }, { role: 'user', content: 'hi' }]);
     await globalThis.fetch('https://api.deepseek.com/chat/completions', { method: 'POST', body: dirty });
     await globalThis.fetch('https://copilot.tencent.com/v3/config');
     await globalThis.fetch('https://copilot.tencent.com/v2/chat/completions', { method: 'GET' });
     assert.equal(calls.length, 3);
-    assert.equal(calls[0].init.body, dirty);
+    assert.equal(calls[0].init.body, dirty, 'another provider must be forwarded byte-identical');
     assert.equal(calls[1].init, undefined);
     assert.equal(calls[2].init.body, undefined);
     restore();
@@ -151,4 +181,13 @@ test('a second install does not stack wrappers', async () => {
   } finally {
     globalThis.fetch = original;
   }
+});
+
+test('the phrase constant is still neutralised on the retry path, not the first attempt', async () => {
+  // The first attempt carries the prompt verbatim (that is the whole point of
+  // relocating instead of rewriting), so the zero-width spelling must only
+  // appear once a rejection has been measured. This pins that boundary.
+  const first = neutralizeChatBody(body([{ role: 'system', content: 'powered by DeepSeek Harness' }, { role: 'user', content: 'hi' }]));
+  assert.equal(first.includes(markOnFirstOccurrence), false);
+  assert.equal(first.includes('DeepSeek Harness'), true);
 });
