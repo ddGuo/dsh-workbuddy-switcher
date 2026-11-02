@@ -42,12 +42,21 @@ const minimalRequire = (id) => {
   throw new Error(`unexpected require: ${id}`);
 };
 
-test('the bundle registers both the bridge module and this plugin', () => {
+test('the bundle registers this plugin and parks the bridge for mounting', () => {
   const { window, registered } = loader();
   vm.runInNewContext(bundleSource, { window, console, Map, Symbol, JSON, Array, Object, String, Math });
-  assert.ok(registered.has('dsh-workbuddy-connect'), 'bridge client module must still register');
+
+  // Only this plugin's id reaches the loader. The vendored bridge's
+  // `dsh-workbuddy-connect` is deliberately NOT forwarded: the loader throws on a
+  // duplicate id, so forwarding it would abort the script on any page that still
+  // held that id from a leftover standalone install — before this registration
+  // ran. That produced the reported `loaded without registering
+  // "dsh-workbuddy-switcher"`; see test/client-registration.test.js.
   assert.ok(registered.has('dsh-workbuddy-switcher'), 'switcher client module must register');
-  // The bridge factory is parked for the switcher half to mount.
+  assert.equal(registered.has('dsh-workbuddy-connect'), false, 'the bridge id must not be forwarded');
+
+  // Its factory is parked for the switcher half to mount, which is why the
+  // loader never needs it.
   assert.equal(typeof window.__DSH_BUNDLED_BRIDGE_CLIENTS__?.get('dsh-workbuddy-connect'), 'function');
 });
 

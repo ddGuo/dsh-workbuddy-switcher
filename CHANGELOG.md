@@ -25,6 +25,53 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Documentation only: no source file changed, so this release exists to put the corrected README on
   the npm page.
 
+## [0.3.9] - 2026-11-02
+
+### Fixed
+
+- **The client half could fail to register, and the host reported it as
+  `client-modules: could not load "dsh-workbuddy-switcher": loaded without
+  registering "dsh-workbuddy-switcher" via __ModuleLoader__.load`.**
+
+  The shipped bundle is the vendored bridge followed by this plugin, and the
+  wrapper forwarded the bridge's `dsh-workbuddy-connect` registration to the
+  loader. The real loader rejects a second registration of one id by
+  **throwing**, so on any page whose factory map already held that id — a
+  leftover standalone `dsh-workbuddy-connect` client, or an earlier
+  generation of this same bundle after an in-place upgrade — the throw landed
+  on the bundle's *first* line. The script aborted there, before this
+  plugin's own registration ran, and the host reported the only symptom it
+  could see: our id was never registered.
+
+  Reproduced in a loader harness that models the throw: with
+  `dsh-workbuddy-connect` preloaded, the forwarding version throws on
+  registration and `dsh-workbuddy-switcher` never appears; with nothing
+  preloaded it works, which is why this only showed up on some machines.
+
+  Two changes:
+
+  - the wrapper now **captures** the bridge factory without forwarding it
+    (`window.__DSH_BUNDLED_BRIDGE_CLIENTS__` is how this plugin mounts that
+    UI, so the loader never needs the vendored id), and a failure while
+    registering the bridge no longer takes the switcher half down;
+  - this plugin's own registration is wrapped in a `try`, so an id the loader
+    already holds is tolerated instead of aborting whatever shares the script.
+    The loader already has the factory in that case, which is the state that
+    matters.
+
+  Note that this plugin's half is concatenated into a combo script with other
+  plugins, so a throw here could also cost a sibling its registration; both
+  guards now keep a duplicate id local.
+
+### Tests
+
+- `test/client-registration.test.js` evaluates the shipped bundle against a
+  loader that throws on duplicates, in four states: clean, bridge id
+  preloaded (the incident), this id preloaded (in-place upgrade), and no
+  loader at all. It also pins that the bridge factory is still captured for
+  mounting and is never forwarded.
+- `test/client-bundle.test.js` updated to the new contract: only
+  `dsh-workbuddy-switcher` reaches the loader.
 ## [Unreleased]
 
 ### Changed
